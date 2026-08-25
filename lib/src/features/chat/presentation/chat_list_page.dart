@@ -1,0 +1,1513 @@
+import 'package:couple_chat_app/src/common/dear_design.dart';
+import 'package:couple_chat_app/src/features/anniversary/data/anniversary_providers.dart';
+import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
+import 'package:couple_chat_app/src/features/chat/data/chat_providers.dart';
+import 'package:couple_chat_app/src/features/chat/data/memory_album_providers.dart';
+import 'package:couple_chat_app/src/features/chat/data/memory_album_repository.dart';
+import 'package:couple_chat_app/src/features/notifications/data/notification_inbox.dart';
+import 'package:couple_chat_app/src/features/settings/data/couple_prefs_providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+String? _homeChatTimeLabel(DateTime? date) {
+  if (date == null) return null;
+
+  final local = date.toLocal();
+  final period = local.hour < 12 ? '오전' : '오후';
+  final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$period $hour:$minute';
+}
+
+String? _otherProfileValue(
+  Map<String, String>? values,
+  String currentUserId,
+) {
+  if (values == null) return null;
+  for (final entry in values.entries) {
+    final value = entry.value.trim();
+    if (entry.key != currentUserId && value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+class ChatListPage extends ConsumerWidget {
+  const ChatListPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(myProfileProvider);
+    final anniversaryAsync = ref.watch(anniversaryDateProvider);
+
+    return profileAsync.when(
+      loading: () => const Scaffold(
+        appBar: _HomeAppBar(),
+        body: DearBackground(child: _HomeLoadingSkeleton()),
+      ),
+      error: (error, _) => Scaffold(
+        appBar: const _HomeAppBar(),
+        body: DearBackground(
+          child: _HomeLoadError(
+            onRetry: () => ref.invalidate(myProfileProvider),
+          ),
+        ),
+      ),
+      data: (profile) {
+        if (profile == null) {
+          return const Scaffold(body: Center(child: Text('로그인이 필요합니다.')));
+        }
+
+        final unreadCountAsync = profile.isPaired
+            ? ref.watch(chatUnreadCountProvider(profile.coupleId!))
+            : const AsyncValue<int>.data(0);
+        final unreadCount = unreadCountAsync.valueOrNull ?? 0;
+        final chatPreview = profile.isPaired
+            ? ref
+                .watch(chatConversationPreviewProvider(profile.coupleId!))
+                .valueOrNull
+            : null;
+
+        final notificationInboxAsync =
+            ref.watch(notificationInboxProvider(profile.userId));
+        final notificationUnreadCount = (notificationInboxAsync.valueOrNull ??
+                const <NotificationInboxItem>[])
+            .where((notification) => notification.isUnread)
+            .length;
+        final gameUnreadCount = (notificationInboxAsync.valueOrNull ??
+                const <NotificationInboxItem>[])
+            .where(
+              (notification) =>
+                  notification.isUnread && notification.category == 'game',
+            )
+            .length;
+
+        final anniversaryDate = anniversaryAsync.valueOrNull;
+        final nextAnniversaryAsync = profile.isPaired
+            ? ref.watch(
+                upcomingAnniversaryTimelineProvider(
+                  AnniversaryTimelineQuery(
+                    coupleId: profile.coupleId!,
+                    limit: 1,
+                  ),
+                ),
+              )
+            : const AsyncValue<List<AnniversaryTimelineEntry>>.data(
+                <AnniversaryTimelineEntry>[],
+              );
+        final chatPath = profile.isPaired ? '/chat/${profile.coupleId!}' : '/';
+        final displayName = profile.isPaired
+            ? '우리'
+            : (profile.nickname.trim().isEmpty
+                ? 'Dear'
+                : profile.nickname.trim());
+        final avatarUrlMap = profile.isPaired && profile.coupleId != null
+            ? ref
+                .watch(coupleAvatarUrlMapProvider(profile.coupleId!))
+                .valueOrNull
+            : null;
+        final avatarUrls =
+            avatarUrlMap?.values.toList(growable: false) ?? const <String>[];
+        final partnerAvatarUrl =
+            _otherProfileValue(avatarUrlMap, profile.userId);
+        final nicknameMap = profile.isPaired && profile.coupleId != null
+            ? ref
+                .watch(coupleNicknameMapProvider(profile.coupleId!))
+                .valueOrNull
+            : null;
+        final partnerName =
+            _otherProfileValue(nicknameMap, profile.userId) ?? '상대방';
+        final nextTimeline = nextAnniversaryAsync.valueOrNull;
+        final nextAnniversaryEntry =
+            nextTimeline == null || nextTimeline.isEmpty
+                ? null
+                : nextTimeline.first;
+
+        return Scaffold(
+          appBar: _HomeAppBar(
+            unreadCount: notificationUnreadCount,
+            onNotifications: () => context.push('/notification-inbox'),
+          ),
+          body: DearBackground(
+            child: SafeArea(
+              top: false,
+              child: ListView(
+                key: const PageStorageKey<String>('dear-home-scroll'),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                children: [
+                  _HomeGreeting(
+                    displayName: displayName,
+                    leftAvatarUrl: avatarUrls.isNotEmpty ? avatarUrls[0] : null,
+                    rightAvatarUrl:
+                        avatarUrls.length > 1 ? avatarUrls[1] : null,
+                  ),
+                  const SizedBox(height: 18),
+                  _RelationshipHero(
+                    isPaired: profile.isPaired,
+                    anniversaryDate: anniversaryDate,
+                    onOpen: () => context.push('/anniversary-reminders'),
+                  ),
+                  const SizedBox(height: 14),
+                  _PrimaryChatCard(
+                    isPaired: profile.isPaired,
+                    unreadCount: unreadCount,
+                    latestPreview: chatPreview?.text,
+                    latestTimeLabel: _homeChatTimeLabel(chatPreview?.createdAt),
+                    partnerName: partnerName,
+                    partnerAvatarUrl: partnerAvatarUrl,
+                    onTap: () => context.push(chatPath),
+                  ),
+                  const SizedBox(height: 16),
+                  _NextAnniversaryCard(
+                    anniversaryDate: anniversaryDate,
+                    upcoming: nextAnniversaryEntry,
+                    loading: nextAnniversaryAsync.isLoading,
+                    hasError: nextAnniversaryAsync.hasError,
+                  ),
+                  const SizedBox(height: 22),
+                  _RecentMemoriesStrip(coupleId: profile.coupleId),
+                  const SizedBox(height: 22),
+                  const _SectionTitle(
+                    title: '빠른 실행',
+                    subtitle: '자주 찾는 우리의 기능을 바로 열어보세요.',
+                  ),
+                  const SizedBox(height: 12),
+                  _FeatureGrid(
+                    items: [
+                      _FeatureItem(
+                        glyph: _FeatureGlyph.anniversary,
+                        title: '기념일',
+                        subtitle: anniversaryDate == null
+                            ? 'D-day 설정'
+                            : anniversaryDdayLabel(anniversaryDate),
+                        onTap: () => context.push('/anniversary-reminders'),
+                      ),
+                      _FeatureItem(
+                        glyph: _FeatureGlyph.koreaMap,
+                        title: '여행 지도',
+                        subtitle: '함께한 장소 보기',
+                        onTap: () => context.push('/travel-map'),
+                      ),
+                      _FeatureItem(
+                        glyph: _FeatureGlyph.omok,
+                        title: '오목',
+                        subtitle: gameUnreadCount > 0
+                            ? '새 요청 $gameUnreadCount개'
+                            : '한 판 하러 가기',
+                        badgeCount: gameUnreadCount,
+                        onTap: () => context.push('/mini-games'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeLoadingSkeleton extends StatelessWidget {
+  const _HomeLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          Row(
+            children: [
+              Expanded(child: _skeleton(height: 54)),
+              const SizedBox(width: 28),
+              _skeleton(width: 116, height: 68, radius: 34),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _skeleton(height: 168, radius: 28),
+          const SizedBox(height: 14),
+          _skeleton(height: 90),
+          const SizedBox(height: 18),
+          _skeleton(height: 88),
+          const SizedBox(height: 22),
+          _skeleton(height: 168, radius: 14),
+        ],
+      ),
+    );
+  }
+
+  Widget _skeleton({
+    double? width,
+    required double height,
+    double radius = DearRadii.medium,
+  }) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: DearColors.line),
+      ),
+    );
+  }
+}
+
+class _HomeLoadError extends StatelessWidget {
+  const _HomeLoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 44,
+              color: DearColors.secondary,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '홈을 불러오지 못했어요.\n연결을 확인하고 다시 시도해 주세요.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: DearColors.secondary,
+                    height: 1.45,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('다시 시도'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeGreeting extends StatelessWidget {
+  const _HomeGreeting({
+    required this.displayName,
+    required this.leftAvatarUrl,
+    required this.rightAvatarUrl,
+  });
+
+  final String displayName;
+  final String? leftAvatarUrl;
+  final String? rightAvatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    if (largeText) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: '안녕하세요, $displayName '),
+                const TextSpan(
+                  text: '♥',
+                  style: TextStyle(color: DearColors.coral),
+                ),
+              ],
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: DearColors.ink,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w600,
+                  height: 1.18,
+                  letterSpacing: 0,
+                ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '오늘도 좋은 하루 보내세요',
+                  maxLines: 2,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DearColors.secondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              DearAvatarPair(
+                leftImageUrl: leftAvatarUrl,
+                rightImageUrl: rightAvatarUrl,
+                size: 58,
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      '안녕하세요, $displayName',
+                      maxLines: largeText ? 2 : 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: DearColors.ink,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w600,
+                            height: 1.18,
+                            letterSpacing: 0,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  const Text(
+                    '♥',
+                    style: TextStyle(
+                      color: DearColors.coral,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '오늘도 좋은 하루 보내세요',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DearColors.secondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        DearAvatarPair(
+          leftImageUrl: leftAvatarUrl,
+          rightImageUrl: rightAvatarUrl,
+          size: 68,
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const _HomeAppBar({
+    this.unreadCount = 0,
+    this.onNotifications,
+  });
+
+  final int unreadCount;
+  final VoidCallback? onNotifications;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBar(
+      title: const _DearHomeTitle(),
+      centerTitle: false,
+      actions: [
+        Semantics(
+          button: true,
+          label: unreadCount > 0 ? '읽지 않은 알림 $unreadCount개' : '알림',
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                tooltip: '알림',
+                onPressed: onNotifications,
+                icon: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: DearColors.ink,
+                  size: 28,
+                ),
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 5,
+                  top: 4,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 18),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: DearColors.coral,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+      ],
+    );
+  }
+}
+
+class _DearHomeTitle extends StatelessWidget {
+  const _DearHomeTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const DearLogoMark(size: 34),
+        const SizedBox(width: 8),
+        Text(
+          'Dear',
+          style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(
+                color: DearColors.coralText,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RelationshipHero extends StatelessWidget {
+  const _RelationshipHero({
+    required this.isPaired,
+    required this.anniversaryDate,
+    required this.onOpen,
+  });
+
+  final bool isPaired;
+  final DateTime? anniversaryDate;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final dday = !isPaired
+        ? '연결 대기'
+        : anniversaryDate == null
+            ? 'D+ -'
+            : anniversaryDdayLabel(anniversaryDate!);
+    final firstDateLabel = anniversaryDate == null
+        ? '설정 전'
+        : anniversaryDateKoreanLabel(anniversaryDate!);
+
+    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+
+    return GestureDetector(
+      onTap: onOpen,
+      child: SizedBox(
+        key: const ValueKey('relationship-hero'),
+        height: largeText ? 232 : 168,
+        child: DearCard(
+          padding: EdgeInsets.zero,
+          radius: 28,
+          gradient: DearGradients.softCard,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final imageWidth =
+                    constraints.maxWidth * (largeText ? 0.3 : 0.4);
+                final textWidth =
+                    constraints.maxWidth * (largeText ? 0.7 : 0.58);
+
+                return Stack(
+                  children: [
+                    Positioned(
+                      right: largeText ? 12 : 24,
+                      bottom: 10,
+                      width: imageWidth,
+                      height: largeText ? 104 : 132,
+                      child: Image.asset(
+                        'assets/images/dear_home_hero_mascots.png',
+                        fit: BoxFit.contain,
+                        alignment: Alignment.bottomRight,
+                      ),
+                    ),
+                    Positioned(
+                      left: largeText ? 22 : 28,
+                      top: largeText ? 24 : 32,
+                      width: textWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '우리의 연애',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: DearColors.coralText,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.1,
+                                ),
+                          ),
+                          SizedBox(height: largeText ? 12 : 20),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              dday,
+                              maxLines: 1,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .displayMedium
+                                  ?.copyWith(
+                                    color: DearColors.coralText,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 44,
+                                    letterSpacing: 0,
+                                    height: 0.96,
+                                  ),
+                            ),
+                          ),
+                          SizedBox(height: largeText ? 8 : 13),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '$firstDateLabel부터 함께 ♥',
+                              maxLines: 1,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: DearColors.secondary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.2,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrimaryChatCard extends StatelessWidget {
+  const _PrimaryChatCard({
+    required this.isPaired,
+    required this.unreadCount,
+    required this.latestPreview,
+    required this.latestTimeLabel,
+    required this.partnerName,
+    required this.partnerAvatarUrl,
+    required this.onTap,
+  });
+
+  final bool isPaired;
+  final int unreadCount;
+  final String? latestPreview;
+  final String? latestTimeLabel;
+  final String partnerName;
+  final String? partnerAvatarUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    return DearCard(
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(DearRadii.medium),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DearRadii.medium),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: Row(
+              children: [
+                _PartnerAvatar(imageUrl: partnerAvatarUrl),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '$partnerName님과 채팅',
+                              maxLines: largeText ? 2 : 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    color: DearColors.ink,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.15,
+                                  ),
+                            ),
+                          ),
+                          if (unreadCount > 0 && !largeText) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              constraints: const BoxConstraints(minWidth: 20),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFEDF2),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: DearColors.coralText,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        isPaired
+                            ? (latestPreview ?? '아직 대화가 없어요')
+                            : '먼저 연결을 완료해 주세요.',
+                        maxLines: largeText ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: DearColors.secondary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                            ),
+                      ),
+                      if (largeText &&
+                          (latestTimeLabel != null || unreadCount > 0)) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (latestTimeLabel != null)
+                              Text(
+                                latestTimeLabel!,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: DearColors.secondary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                              ),
+                            if (unreadCount > 0)
+                              Text(
+                                '${unreadCount > 99 ? '99+' : unreadCount}개 안 읽음',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: DearColors.coralText,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (!largeText) ...[
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (latestTimeLabel != null)
+                        Text(
+                          latestTimeLabel!,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: DearColors.secondary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                        )
+                      else
+                        const SizedBox(height: 16),
+                      const SizedBox(height: 10),
+                      if (unreadCount > 0)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: DearColors.coral,
+                            shape: BoxShape.circle,
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 8, height: 8),
+                    ],
+                  ),
+                ],
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 24,
+                  color: DearColors.secondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PartnerAvatar extends StatelessWidget {
+  const _PartnerAvatar({required this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = this.imageUrl?.trim();
+    return Container(
+      width: 56,
+      height: 56,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: DearColors.line),
+      ),
+      child: ClipOval(
+        child: imageUrl == null || imageUrl.isEmpty
+            ? const ColoredBox(
+                color: DearColors.coralSoft,
+                child: Icon(Icons.person_rounded, color: DearColors.coralText),
+              )
+            : Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const ColoredBox(
+                  color: DearColors.coralSoft,
+                  child:
+                      Icon(Icons.person_rounded, color: DearColors.coralText),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _NextAnniversaryCard extends StatelessWidget {
+  const _NextAnniversaryCard({
+    required this.anniversaryDate,
+    required this.upcoming,
+    required this.loading,
+    required this.hasError,
+  });
+
+  final DateTime? anniversaryDate;
+  final AnniversaryTimelineEntry? upcoming;
+  final bool loading;
+  final bool hasError;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final daysUntil = upcoming == null
+        ? null
+        : DateUtils.dateOnly(upcoming!.eventDate).difference(today).inDays;
+    final title = loading
+        ? '가장 가까운 날을 찾고 있어요'
+        : hasError
+            ? '기념일을 불러오지 못했어요'
+            : upcoming == null
+                ? '다음 기념일을 준비해요'
+                : daysUntil == 0
+                    ? '오늘은 ${upcoming!.title}이에요'
+                    : '${upcoming!.title}까지 $daysUntil일';
+    final subtitle = upcoming == null
+        ? anniversaryDate == null
+            ? '관계 설정에서 우리의 시작일을 등록해 주세요.'
+            : '기념일 화면에서 기억할 날을 추가해 보세요.'
+        : _dateWithDots(upcoming!.eventDate);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '다음 기념일',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: DearColors.ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 10),
+        DearCard(
+          padding: EdgeInsets.zero,
+          shadowOpacity: 0.35,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(DearRadii.medium),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(DearRadii.medium),
+              onTap: () => context.push('/anniversary-reminders'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: const BoxDecoration(
+                        color: DearColors.coralSoft,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Image.asset(
+                        'assets/images/anniversary/anniv_event_heart.png',
+                        width: 38,
+                        height: 38,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: DearColors.ink,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: DearColors.secondary,
+                                    ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: DearColors.secondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _dateWithDots(DateTime date) {
+  final normalized = DateUtils.dateOnly(date);
+  final month = normalized.month.toString().padLeft(2, '0');
+  final day = normalized.day.toString().padLeft(2, '0');
+  return '${normalized.year}.$month.$day';
+}
+
+class _HomeFeatureIcon extends StatelessWidget {
+  const _HomeFeatureIcon({
+    required this.glyph,
+    this.size = 52,
+  });
+
+  final _FeatureGlyph glyph;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      glyph.assetPath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+    );
+  }
+}
+
+class _RecentMemoriesStrip extends ConsumerWidget {
+  const _RecentMemoriesStrip({required this.coupleId});
+
+  final String? coupleId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final coupleId = this.coupleId;
+    final photosAsync = coupleId == null
+        ? const AsyncValue<List<MemoryAlbumPhoto>>.data(<MemoryAlbumPhoto>[])
+        : ref.watch(recentMemoryAlbumPhotosProvider(coupleId));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              '최근 추억',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: DearColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed:
+                  coupleId == null ? null : () => context.go('/memory-album'),
+              style: TextButton.styleFrom(
+                foregroundColor: DearColors.secondary,
+                minimumSize: const Size(44, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              child: const Text('더보기'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        photosAsync.when(
+          loading: () => const _RecentMemoriesLoadingStrip(),
+          error: (_, __) => _RecentMemoriesError(
+            onRetry: coupleId == null
+                ? null
+                : () => ref.invalidate(
+                      recentMemoryAlbumPhotosProvider(coupleId),
+                    ),
+          ),
+          data: (photos) {
+            if (photos.isEmpty) {
+              return _RecentMemoriesEmptyStrip(
+                onTap:
+                    coupleId == null ? null : () => context.go('/memory-album'),
+              );
+            }
+
+            return _RecentMemoriesMosaic(
+              photos: photos.take(3).toList(growable: false),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentMemoriesLoadingStrip extends StatelessWidget {
+  const _RecentMemoriesLoadingStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 168,
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: _MemorySkeletonTile()),
+          SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              children: [
+                Expanded(child: _MemorySkeletonTile()),
+                SizedBox(height: 8),
+                Expanded(child: _MemorySkeletonTile()),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentMemoriesEmptyStrip extends StatelessWidget {
+  const _RecentMemoriesEmptyStrip({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DearCard(
+      padding: EdgeInsets.zero,
+      shadowOpacity: 0.25,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(DearRadii.medium),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DearRadii.medium),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                const _HomeFeatureIcon(glyph: _FeatureGlyph.album, size: 44),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '아직 담긴 추억이 없어요. 첫 사진을 추가해 보세요.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DearColors.secondary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: DearColors.secondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentMemoriesError extends StatelessWidget {
+  const _RecentMemoriesError({required this.onRetry});
+
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return DearCard(
+      padding: const EdgeInsets.all(16),
+      shadowOpacity: 0.2,
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_rounded, color: DearColors.secondary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '최근 추억을 불러오지 못했어요.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DearColors.secondary,
+                  ),
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('다시 시도')),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemorySkeletonTile extends StatelessWidget {
+  const _MemorySkeletonTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.76),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: DearColors.line),
+      ),
+    );
+  }
+}
+
+class _RecentMemoriesMosaic extends StatelessWidget {
+  const _RecentMemoriesMosaic({required this.photos});
+
+  final List<MemoryAlbumPhoto> photos;
+
+  @override
+  Widget build(BuildContext context) {
+    if (photos.length == 1) {
+      return SizedBox(
+        height: 168,
+        child: _RecentMemoryPhotoTile(photo: photos.first),
+      );
+    }
+
+    return SizedBox(
+      height: 168,
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: _RecentMemoryPhotoTile(photo: photos.first),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              children: [
+                Expanded(child: _RecentMemoryPhotoTile(photo: photos[1])),
+                if (photos.length > 2) ...[
+                  const SizedBox(height: 8),
+                  Expanded(child: _RecentMemoryPhotoTile(photo: photos[2])),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentMemoryPhotoTile extends StatefulWidget {
+  const _RecentMemoryPhotoTile({required this.photo});
+
+  final MemoryAlbumPhoto photo;
+
+  @override
+  State<_RecentMemoryPhotoTile> createState() => _RecentMemoryPhotoTileState();
+}
+
+class _RecentMemoryPhotoTileState extends State<_RecentMemoryPhotoTile> {
+  static final Map<String, _CachedRecentMemoryUrl> _signedUrlCache =
+      <String, _CachedRecentMemoryUrl>{};
+  static final Map<String, Future<String>> _inflightSignedUrlRequests =
+      <String, Future<String>>{};
+  static const Duration _signedUrlRefreshInterval = Duration(minutes: 55);
+
+  late Future<String> _signedUrlFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _signedUrlFuture = _resolveSignedUrl(widget.photo.storagePath);
+  }
+
+  @override
+  void didUpdateWidget(covariant _RecentMemoryPhotoTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photo.storagePath != widget.photo.storagePath) {
+      _signedUrlFuture = _resolveSignedUrl(widget.photo.storagePath);
+    }
+  }
+
+  Future<String> _resolveSignedUrl(String storagePath) {
+    final now = DateTime.now();
+    final cached = _signedUrlCache[storagePath];
+    if (cached != null &&
+        now.difference(cached.issuedAt) < _signedUrlRefreshInterval) {
+      return Future<String>.value(cached.url);
+    }
+
+    final inflight = _inflightSignedUrlRequests[storagePath];
+    if (inflight != null) return inflight;
+
+    final request = Supabase.instance.client.storage
+        .from('memory-album-photos')
+        .createSignedUrl(storagePath, 3600)
+        .then((url) {
+      _signedUrlCache[storagePath] = _CachedRecentMemoryUrl(
+        url: url,
+        issuedAt: DateTime.now(),
+      );
+      _inflightSignedUrlRequests.remove(storagePath);
+      return url;
+    }).catchError((error) {
+      _inflightSignedUrlRequests.remove(storagePath);
+      throw error;
+    });
+
+    _inflightSignedUrlRequests[storagePath] = request;
+    return request;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: _signedUrlFuture,
+      builder: (context, snapshot) {
+        final imageUrl = snapshot.data;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            decoration: BoxDecoration(
+              color: DearColors.blush,
+              border: Border.all(color: DearColors.line),
+              boxShadow: dearSoftShadow(0.2),
+            ),
+            child: imageUrl == null
+                ? const Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.medium,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: _HomeFeatureIcon(
+                        glyph: _FeatureGlyph.album,
+                        size: 44,
+                      ),
+                    ),
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CachedRecentMemoryUrl {
+  const _CachedRecentMemoryUrl({
+    required this.url,
+    required this.issuedAt,
+  });
+
+  final String url;
+  final DateTime issuedAt;
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: DearColors.ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: DearColors.muted,
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeatureGrid extends StatelessWidget {
+  const _FeatureGrid({required this.items});
+
+  final List<_FeatureItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        mainAxisExtent: largeText ? 166 : 122,
+      ),
+      itemBuilder: (context, index) => _FeatureTile(item: items[index]),
+    );
+  }
+}
+
+enum _FeatureGlyph { album, anniversary, omok, koreaMap, worldMap, settings }
+
+extension _FeatureGlyphAsset on _FeatureGlyph {
+  String get assetPath => switch (this) {
+        _FeatureGlyph.album => 'assets/images/home_icons/album.png',
+        _FeatureGlyph.anniversary => 'assets/images/home_icons/anniversary.png',
+        _FeatureGlyph.omok => 'assets/images/home_icons/omok.png',
+        _FeatureGlyph.koreaMap => 'assets/images/home_icons/korea_map.png',
+        _FeatureGlyph.worldMap => 'assets/images/home_icons/world_map.png',
+        _FeatureGlyph.settings => 'assets/images/home_icons/settings.png',
+      };
+}
+
+class _FeatureItem {
+  const _FeatureItem({
+    required this.glyph,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.badgeCount = 0,
+  });
+
+  final _FeatureGlyph glyph;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final int badgeCount;
+}
+
+class _FeatureTile extends StatelessWidget {
+  const _FeatureTile({required this.item});
+
+  final _FeatureItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return DearCard(
+      padding: EdgeInsets.zero,
+      shadowOpacity: 0.55,
+      borderColor: DearColors.line,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(DearRadii.medium),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DearRadii.medium),
+          onTap: item.onTap,
+          child: Stack(
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _HomeFeatureIcon(glyph: item.glyph, size: 44),
+                    const SizedBox(height: 7),
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: DearColors.ink,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: DearColors.secondary,
+                            fontSize: 11,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (item.badgeCount > 0)
+                Positioned(
+                  right: 7,
+                  top: 7,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 20),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: DearColors.coral,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${item.badgeCount}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
