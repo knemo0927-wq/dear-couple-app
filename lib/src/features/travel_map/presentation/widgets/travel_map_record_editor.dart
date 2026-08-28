@@ -48,6 +48,7 @@ class TravelMapCollapsedEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return TravelMapSheetFrame(
       child: ListTile(
         key: const ValueKey('travel-map-collapsed-editor'),
@@ -63,7 +64,7 @@ class TravelMapCollapsedEditor extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: DearColors.ink,
+                color: scheme.onSurface,
                 fontWeight: FontWeight.w900,
               ),
         ),
@@ -72,12 +73,14 @@ class TravelMapCollapsedEditor extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: DearColors.secondary,
+                color: scheme.onSurfaceVariant,
               ),
         ),
         trailing: Icon(
           Icons.keyboard_arrow_up_rounded,
-          color: onExpand == null ? DearColors.disabled : DearColors.ink,
+          color: onExpand == null
+              ? scheme.onSurface.withValues(alpha: 0.38)
+              : scheme.onSurface,
         ),
         onTap: onExpand,
       ),
@@ -135,6 +138,7 @@ class TravelMapRecordEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final dateLabel = visitedAt == null
         ? '방문일을 선택해 주세요'
         : '${visitedAt!.year}.${visitedAt!.month.toString().padLeft(2, '0')}.${visitedAt!.day.toString().padLeft(2, '0')}';
@@ -171,7 +175,7 @@ class TravelMapRecordEditor extends StatelessWidget {
                               .textTheme
                               .headlineSmall
                               ?.copyWith(
-                                color: DearColors.ink,
+                                color: scheme.onSurface,
                                 fontWeight: FontWeight.w900,
                                 height: 1.08,
                               ),
@@ -183,7 +187,7 @@ class TravelMapRecordEditor extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: DearColors.secondary,
+                                    color: scheme.onSurfaceVariant,
                                     fontWeight: FontWeight.w700,
                                   ),
                         ),
@@ -195,8 +199,8 @@ class TravelMapRecordEditor extends StatelessWidget {
                     constraints:
                         const BoxConstraints.tightFor(width: 48, height: 48),
                     style: IconButton.styleFrom(
-                      backgroundColor: DearColors.blush,
-                      foregroundColor: DearColors.ink,
+                      backgroundColor: scheme.surfaceContainerHighest,
+                      foregroundColor: scheme.onSurface,
                     ),
                     onPressed: onCollapse,
                     icon: const Icon(Icons.close_rounded),
@@ -204,7 +208,7 @@ class TravelMapRecordEditor extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              const Divider(height: 1, color: DearColors.line),
+              Divider(height: 1, color: scheme.outlineVariant),
               const SizedBox(height: 16),
               _EditorRow(
                 label: '색상',
@@ -229,7 +233,7 @@ class TravelMapRecordEditor extends StatelessWidget {
               _EditorRow(
                 label: '방문일',
                 child: Material(
-                  color: Colors.white,
+                  color: scheme.surface,
                   borderRadius: BorderRadius.circular(14),
                   child: InkWell(
                     key: const ValueKey('travel-map-visit-date'),
@@ -240,13 +244,13 @@ class TravelMapRecordEditor extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: DearColors.line),
+                        border: Border.all(color: scheme.outline),
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.calendar_today_rounded,
-                            color: DearColors.secondary,
+                            color: scheme.onSurfaceVariant,
                             size: 21,
                           ),
                           const SizedBox(width: 10),
@@ -258,8 +262,8 @@ class TravelMapRecordEditor extends StatelessWidget {
                                   .bodyLarge
                                   ?.copyWith(
                                     color: visitedAt == null
-                                        ? DearColors.disabled
-                                        : DearColors.ink,
+                                        ? scheme.onSurfaceVariant
+                                        : scheme.onSurface,
                                     fontWeight: FontWeight.w600,
                                   ),
                             ),
@@ -275,9 +279,9 @@ class TravelMapRecordEditor extends StatelessWidget {
                               icon: const Icon(Icons.clear_rounded, size: 20),
                             )
                           else
-                            const Icon(
+                            Icon(
                               Icons.keyboard_arrow_down_rounded,
-                              color: DearColors.secondary,
+                              color: scheme.onSurfaceVariant,
                             ),
                         ],
                       ),
@@ -299,14 +303,14 @@ class TravelMapRecordEditor extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText: '여행에서 기억하고 싶은 순간을 남겨보세요.',
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: scheme.surface,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: DearColors.line),
+                      borderSide: BorderSide(color: scheme.outline),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: DearColors.line),
+                      borderSide: BorderSide(color: scheme.outline),
                     ),
                   ),
                 ),
@@ -315,7 +319,7 @@ class TravelMapRecordEditor extends StatelessWidget {
               Text(
                 '사진',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: DearColors.ink,
+                      color: scheme.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
               ),
@@ -333,7 +337,7 @@ class TravelMapRecordEditor extends StatelessWidget {
                 Text(
                   photosError!,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DearColors.error,
+                        color: scheme.error,
                       ),
                 ),
               ],
@@ -346,7 +350,7 @@ class TravelMapRecordEditor extends StatelessWidget {
                     child: Text(
                       saving ? '기록을 저장하고 있어요.' : '기록을 삭제하고 있어요.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: DearColors.secondary,
+                            color: scheme.onSurfaceVariant,
                           ),
                     ),
                   ),
@@ -358,8 +362,8 @@ class TravelMapRecordEditor extends StatelessWidget {
                       key: const ValueKey('travel-map-delete-button'),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(54),
-                        foregroundColor: DearColors.coralText,
-                        side: const BorderSide(color: DearColors.line),
+                        foregroundColor: scheme.error,
+                        side: BorderSide(color: scheme.outline),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -397,15 +401,17 @@ class TravelMapSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
+      key: const ValueKey('travel-map-sheet-surface'),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: DearColors.backgroundTop,
+        color: scheme.surfaceContainerLow,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: scheme.outlineVariant),
         boxShadow: [
           BoxShadow(
-            color: DearColors.shadow.withValues(alpha: 0.1),
+            color: scheme.shadow.withValues(alpha: 0.16),
             blurRadius: 24,
             offset: const Offset(0, -8),
           ),
@@ -423,7 +429,7 @@ class TravelMapSheetFrame extends StatelessWidget {
                 height: 5,
                 margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(
-                  color: DearColors.line,
+                  color: scheme.outlineVariant,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -461,7 +467,7 @@ class _EditorRow extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: DearColors.ink,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -486,9 +492,14 @@ class _ColorSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final color = Color(
       int.parse('FF${colorHex.replaceAll('#', '')}', radix: 16),
     );
+    final checkColor =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
     return Tooltip(
       message: '색상 $colorHex',
       child: Semantics(
@@ -503,27 +514,31 @@ class _ColorSwatch extends StatelessWidget {
             height: 48,
             child: Center(
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
+                duration: DearMotion.duration(context, DearMotion.fast),
                 width: selected ? 38 : 34,
                 height: selected ? 38 : 34,
                 decoration: BoxDecoration(
                   color: color,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
+                  border: Border.all(color: scheme.surface, width: 3),
                   boxShadow: [
-                    ...dearSoftShadow(0.28),
+                    BoxShadow(
+                      color: scheme.shadow.withValues(alpha: 0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
                     if (selected)
-                      const BoxShadow(
-                        color: DearColors.coral,
+                      BoxShadow(
+                        color: scheme.primary,
                         spreadRadius: 2,
                       ),
                   ],
                 ),
                 child: selected
-                    ? const Icon(
+                    ? Icon(
                         Icons.check_rounded,
                         size: 20,
-                        color: Colors.white,
+                        color: checkColor,
                       )
                     : null,
               ),
@@ -554,6 +569,7 @@ class _PhotoStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final visiblePhotos = photos.take(8).toList(growable: false);
     return SizedBox(
       height: 92,
@@ -584,14 +600,14 @@ class _PhotoStrip extends StatelessWidget {
                     width: 88,
                     height: 88,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox(
+                    errorBuilder: (_, __, ___) => SizedBox(
                       width: 88,
                       height: 88,
                       child: ColoredBox(
-                        color: DearColors.blush,
+                        color: scheme.surfaceContainerHigh,
                         child: Icon(
                           Icons.broken_image_outlined,
-                          color: DearColors.secondary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -605,9 +621,9 @@ class _PhotoStrip extends StatelessWidget {
                     constraints:
                         const BoxConstraints.tightFor(width: 44, height: 44),
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: DearColors.ink,
-                      side: const BorderSide(color: DearColors.line),
+                      backgroundColor: scheme.surface,
+                      foregroundColor: scheme.onSurface,
+                      side: BorderSide(color: scheme.outline),
                     ),
                     onPressed: enabled ? () => onDeletePhoto(photo.id) : null,
                     icon: const Icon(Icons.close_rounded, size: 19),
@@ -635,13 +651,14 @@ class _AddPhotoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: '여행 사진 추가',
       child: Semantics(
         button: true,
         label: loading ? '여행 사진 업로드 중' : '여행 사진 추가',
         child: Material(
-          color: DearColors.blush,
+          color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(14),
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
@@ -651,7 +668,7 @@ class _AddPhotoTile extends StatelessWidget {
               height: 88,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: DearColors.coralLight),
+                border: Border.all(color: scheme.outline),
               ),
               child: Center(
                 child: loading
@@ -660,9 +677,9 @@ class _AddPhotoTile extends StatelessWidget {
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(
+                    : Icon(
                         Icons.add_photo_alternate_outlined,
-                        color: DearColors.coralText,
+                        color: scheme.primary,
                         size: 32,
                       ),
               ),

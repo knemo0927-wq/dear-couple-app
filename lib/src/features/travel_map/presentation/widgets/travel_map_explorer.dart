@@ -1,4 +1,3 @@
-import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/travel_map/presentation/travel_map_filter.dart';
 import 'package:flutter/material.dart';
 
@@ -33,7 +32,7 @@ Future<void> showTravelMapHelp(BuildContext context) {
           Text(
             '여행 지도 사용법',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: DearColors.ink,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w900,
                 ),
           ),
@@ -71,6 +70,7 @@ class TravelMapSearchLauncher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       key: const ValueKey('travel-map-place-list-launcher-semantics'),
       excludeSemantics: true,
@@ -79,10 +79,10 @@ class TravelMapSearchLauncher extends StatelessWidget {
       hint: '지도를 조작하지 않고 장소를 검색하거나 방문 상태로 필터링합니다.',
       onTap: onTap,
       child: Material(
-        color: Colors.white.withValues(alpha: 0.96),
+        color: scheme.surface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(16),
         elevation: 1,
-        shadowColor: DearColors.shadow.withValues(alpha: 0.16),
+        shadowColor: scheme.shadow.withValues(alpha: 0.16),
         child: InkWell(
           key: const ValueKey('travel-map-search-launcher'),
           borderRadius: BorderRadius.circular(16),
@@ -92,13 +92,13 @@ class TravelMapSearchLauncher extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: DearColors.line),
+              border: Border.all(color: scheme.outline),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.search_rounded,
-                  color: DearColors.secondary,
+                  color: scheme.primary,
                   size: 22,
                 ),
                 const SizedBox(width: 10),
@@ -106,14 +106,14 @@ class TravelMapSearchLauncher extends StatelessWidget {
                   child: Text(
                     '장소 목록 열기',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: DearColors.disabled,
+                          color: scheme.onSurface,
                           fontWeight: FontWeight.w600,
                         ),
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.tune_rounded,
-                  color: DearColors.coralText,
+                  color: scheme.primary,
                   size: 22,
                 ),
               ],
@@ -163,6 +163,7 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final results = filterTravelPlaces(
       places: widget.places,
       query: _searchController.text,
@@ -186,7 +187,7 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
               child: Text(
                 '여행 장소 찾기',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: DearColors.ink,
+                      color: scheme.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
               ),
@@ -216,14 +217,14 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
                     icon: const Icon(Icons.cancel_rounded),
                   ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: scheme.surface,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: DearColors.line),
+              borderSide: BorderSide(color: scheme.outline),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: DearColors.line),
+              borderSide: BorderSide(color: scheme.outline),
             ),
           ),
         ),
@@ -264,10 +265,11 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
     ];
 
     return Container(
+      key: const ValueKey('travel-place-explorer-surface'),
       height: maxHeight,
-      decoration: const BoxDecoration(
-        color: DearColors.backgroundTop,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
@@ -280,7 +282,7 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
                 height: 5,
                 margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: DearColors.line,
+                  color: scheme.outlineVariant,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -335,6 +337,7 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
   }
 
   Widget _placeTile(TravelMapPlaceItem place) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       button: true,
       label:
@@ -342,10 +345,10 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),
         elevation: 0,
-        color: Colors.white,
+        color: scheme.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: DearColors.line),
+          side: BorderSide(color: scheme.outline),
         ),
         child: ListTile(
           key: ValueKey('travel-place-${place.id}'),
@@ -355,12 +358,12 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
             place.visited
                 ? Icons.check_circle_rounded
                 : Icons.location_on_outlined,
-            color: place.visited ? DearColors.coralText : DearColors.muted,
+            color: place.visited ? scheme.primary : scheme.onSurfaceVariant,
           ),
           title: Text(
             place.title,
-            style: const TextStyle(
-              color: DearColors.ink,
+            style: TextStyle(
+              color: scheme.onSurface,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -368,8 +371,7 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
           trailing: Text(
             place.visited ? '방문' : '미방문',
             style: TextStyle(
-              color:
-                  place.visited ? DearColors.coralText : DearColors.secondary,
+              color: place.visited ? scheme.primary : scheme.onSurfaceVariant,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -391,7 +393,7 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: DearColors.ink,
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
       ),
@@ -412,10 +414,10 @@ class _EmptySearchResult extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.travel_explore_rounded,
               size: 48,
-              color: DearColors.muted,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 12),
             const Text('조건에 맞는 장소가 없어요.'),
@@ -443,7 +445,7 @@ class _HelpRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
-          Icon(icon, color: DearColors.coralText),
+          Icon(icon, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(child: Text(text)),
         ],

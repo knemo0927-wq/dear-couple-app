@@ -483,7 +483,7 @@ class _WorldMapPageState extends ConsumerState<WorldMapPage> {
     }
 
     return Scaffold(
-      backgroundColor: DearColors.backgroundTop,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       appBar: _topBar(onMenuSelected: handleMenu),
       body: Stack(
         clipBehavior: Clip.hardEdge,
@@ -584,7 +584,8 @@ class _WorldMapPageState extends ConsumerState<WorldMapPage> {
             right: 0,
             bottom: 0,
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
+              key: const ValueKey('travel-map-editor-switcher'),
+              duration: DearMotion.duration(context, DearMotion.standard),
               child: _editorExpanded && selectedCountry != null
                   ? TravelMapRecordEditor(
                       key: const ValueKey('travel-map-editor-expanded'),

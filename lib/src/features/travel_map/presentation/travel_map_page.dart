@@ -64,7 +64,6 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
     _editorExpanded = widget.initialCityId != null;
     _mapAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 260),
     )..addListener(() {
         final animation = _mapAnimation;
         if (animation != null) {
@@ -93,6 +92,13 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
 
   void _animateMapTo(Matrix4 value) {
     _mapAnimationController.stop();
+    final duration = DearMotion.duration(context, DearMotion.emphasized);
+    if (duration == DearMotion.instant) {
+      _mapAnimation = null;
+      _mapTransformationController.value = value;
+      return;
+    }
+    _mapAnimationController.duration = duration;
     _mapAnimation = Matrix4Tween(
       begin: _mapTransformationController.value.clone(),
       end: value,
@@ -629,7 +635,7 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
     }
 
     return Scaffold(
-      backgroundColor: DearColors.backgroundTop,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       appBar: _topBar(onMenuSelected: handleMenu),
       body: Stack(
         clipBehavior: Clip.hardEdge,
@@ -734,7 +740,8 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
             right: 0,
             bottom: 0,
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
+              key: const ValueKey('travel-map-editor-switcher'),
+              duration: DearMotion.duration(context, DearMotion.standard),
               child: _editorExpanded && selectedCity != null
                   ? TravelMapRecordEditor(
                       key: const ValueKey('travel-map-editor-expanded'),

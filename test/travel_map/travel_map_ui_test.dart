@@ -1,3 +1,4 @@
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
@@ -26,6 +27,184 @@ void main() {
     coupleId: 'couple-1',
     avatarPath: null,
   );
+
+  testWidgets('다크 지도 화면은 컨트롤과 장소 목록에 의미 역할 색과 Reduce Motion을 적용한다',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final darkTheme = AppTheme.dark();
+    final scheme = darkTheme.colorScheme;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myProfileProvider.overrideWith((ref) async => profile),
+          travelCitiesProvider.overrideWith(
+            (ref) async => const [
+              TravelCity(
+                id: 'seoul',
+                code: 'METRO_11',
+                name: '서울',
+                regionGroup: '수도권',
+                centerLat: 37.5665,
+                centerLng: 126.978,
+                sortOrder: 1,
+              ),
+            ],
+          ),
+          travelCityVisitsProvider.overrideWith(
+            (ref, coupleId) => Stream.value(const <TravelCityVisit>[]),
+          ),
+          travelCityPhotosProvider.overrideWith(
+            (ref, args) => Stream.value(const <TravelCityPhoto>[]),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: darkTheme,
+          themeMode: ThemeMode.dark,
+          home: const MediaQuery(
+            data: MediaQueryData(
+              size: Size(390, 844),
+              disableAnimations: true,
+            ),
+            child: TravelMapPage(),
+          ),
+        ),
+      ),
+    );
+
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('travel-map-progress-surface')),
+    );
+    final appBar = tester.widget<AppBar>(find.byType(AppBar));
+    expect(appBar.backgroundColor, scheme.surface.withValues(alpha: 0.94));
+
+    final launcherMaterial = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(TravelMapSearchLauncher),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    final launcherText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('travel-map-search-launcher')),
+        matching: find.text('장소 목록 열기'),
+      ),
+    );
+    expect(launcherMaterial.color, scheme.surface.withValues(alpha: 0.96));
+    expect(launcherText.style?.color, scheme.onSurface);
+
+    final progressSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('travel-map-progress-surface')),
+    );
+    final progressDecoration = progressSurface.decoration! as BoxDecoration;
+    expect(progressDecoration.color, scheme.surface.withValues(alpha: 0.96));
+
+    final zoomMaterial = tester.widget<Material>(
+      find.byKey(const ValueKey('travel-map-zoom-controls')),
+    );
+    final zoomContainer = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('travel-map-zoom-controls')),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final zoomDecoration = zoomContainer.decoration! as BoxDecoration;
+    final zoomBorder = zoomDecoration.border! as Border;
+    expect(zoomMaterial.color, scheme.surface.withValues(alpha: 0.96));
+    expect(zoomBorder.top.color, scheme.outline);
+
+    await tester.tap(
+      find.byKey(const ValueKey('travel-map-search-launcher')),
+    );
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('travel-place-explorer-surface')),
+    );
+    final explorerSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('travel-place-explorer-surface')),
+    );
+    expect(
+      (explorerSurface.decoration! as BoxDecoration).color,
+      scheme.surfaceContainerLow,
+    );
+    final placeTitle = tester.widget<Text>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('travel-place-seoul')),
+            matching: find.text('서울'),
+          )
+          .first,
+    );
+    expect(placeTitle.style?.color, scheme.onSurface);
+    expect(
+      placeTitle.style?.color,
+      isNot(scheme.onSurface.withValues(alpha: 0.38)),
+    );
+
+    final seoulTile = find.byKey(const ValueKey('travel-place-seoul'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.scrollUntilVisible(
+      seoulTile,
+      280,
+      scrollable: find
+          .descendant(
+            of: find.byType(TravelPlaceExplorerSheet),
+            matching: find.byType(Scrollable),
+          )
+          .last,
+    );
+    await tester.tap(seoulTile);
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('travel-map-editor-expanded')),
+    );
+    final editorSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('travel-map-sheet-surface')),
+    );
+    final editorDecoration = editorSurface.decoration! as BoxDecoration;
+    expect(editorDecoration.color, scheme.surfaceContainerLow);
+    final memoField = tester.widget<TextField>(
+      find.byKey(const ValueKey('travel-map-memo-field')),
+    );
+    expect(memoField.decoration?.fillColor, scheme.surface);
+    expect(
+      (memoField.decoration?.enabledBorder! as OutlineInputBorder)
+          .borderSide
+          .color,
+      scheme.outline,
+    );
+    expect(
+      tester
+          .widget<AnimatedSwitcher>(
+            find.byKey(const ValueKey('travel-map-editor-switcher')),
+          )
+          .duration,
+      Duration.zero,
+    );
+    expect(
+      tester
+          .widget<AnimatedContainer>(
+            find
+                .descendant(
+                  of: find.byType(TravelMapRecordEditor),
+                  matching: find.byType(AnimatedContainer),
+                )
+                .first,
+          )
+          .duration,
+      Duration.zero,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('공통 헤더는 뒤로가기, 제목, 세그먼트와 실제 더보기 동작을 제공한다', (tester) async {
     TravelMapSection? selectedSection;

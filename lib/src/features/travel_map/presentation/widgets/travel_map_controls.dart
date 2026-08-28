@@ -1,4 +1,3 @@
-import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:flutter/material.dart';
 
 class TravelMapProgressCard extends StatelessWidget {
@@ -19,19 +18,27 @@ class TravelMapProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final progress = totalCount == 0 ? 0.0 : visitedCount / totalCount;
     final percent = (progress * 100).round();
     final Widget card;
     if (compact) {
       card = Container(
+        key: const ValueKey('travel-map-progress-surface'),
         width: expanded ? double.infinity : 196,
         constraints: const BoxConstraints(minHeight: 50),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.96),
+          color: scheme.surface.withValues(alpha: 0.96),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: DearColors.line),
-          boxShadow: dearSoftShadow(0.7),
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: 0.12),
+              blurRadius: 22,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -39,7 +46,7 @@ class TravelMapProgressCard extends StatelessWidget {
               child: Text(
                 '$placeLabel 방문 $visitedCount/$totalCount',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: DearColors.ink,
+                      color: scheme.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
               ),
@@ -48,7 +55,7 @@ class TravelMapProgressCard extends StatelessWidget {
             Text(
               '$percent%',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: DearColors.coralText,
+                    color: scheme.primary,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -57,13 +64,20 @@ class TravelMapProgressCard extends StatelessWidget {
       );
     } else {
       card = Container(
+        key: const ValueKey('travel-map-progress-surface'),
         width: expanded ? double.infinity : 154,
         padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.96),
+          color: scheme.surface.withValues(alpha: 0.96),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: DearColors.line),
-          boxShadow: dearSoftShadow(0.7),
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: 0.12),
+              blurRadius: 22,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,7 +86,7 @@ class TravelMapProgressCard extends StatelessWidget {
             Text(
               '방문률',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: DearColors.ink,
+                    color: scheme.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -83,7 +97,7 @@ class TravelMapProgressCard extends StatelessWidget {
                 Text(
                   '$percent%',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: DearColors.coralText,
+                        color: scheme.primary,
                         fontWeight: FontWeight.w900,
                         height: 1,
                       ),
@@ -92,7 +106,7 @@ class TravelMapProgressCard extends StatelessWidget {
                 Text(
                   '$visitedCount/$totalCount',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: DearColors.secondary,
+                        color: scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -104,8 +118,8 @@ class TravelMapProgressCard extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 7,
-                backgroundColor: DearColors.blushDeep,
-                color: DearColors.coral,
+                backgroundColor: scheme.surfaceContainerHighest,
+                color: scheme.primary,
               ),
             ),
           ],
@@ -147,6 +161,7 @@ class TravelMapZoomControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final buttons = <Widget>[
       _MapControlButton(
         tooltip: locating ? '현재 위치 찾는 중' : '현재 위치',
@@ -175,13 +190,19 @@ class TravelMapZoomControls extends StatelessWidget {
     ];
     return Material(
       key: const ValueKey('travel-map-zoom-controls'),
-      color: Colors.white.withValues(alpha: 0.96),
+      color: scheme.surface.withValues(alpha: 0.96),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: DearColors.line),
-          boxShadow: dearSoftShadow(0.65),
+          border: Border.all(color: scheme.outline),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: 0.12),
+              blurRadius: 22,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: horizontal
             ? Row(mainAxisSize: MainAxisSize.min, children: buttons)
@@ -323,19 +344,20 @@ class _TravelMapRealtimeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: '실시간 연결이 끊겼어요. 마지막 기록을 표시하고 있어요.',
       child: Semantics(
         key: const ValueKey('travel-map-realtime-error'),
         liveRegion: true,
         label: label,
-        child: const Material(
-          color: Colors.white,
-          shape: CircleBorder(),
+        child: Material(
+          color: scheme.surface,
+          shape: const CircleBorder(),
           child: SizedBox(
             width: 48,
             height: 48,
-            child: Icon(Icons.cloud_off_rounded, color: DearColors.error),
+            child: Icon(Icons.cloud_off_rounded, color: scheme.error),
           ),
         ),
       ),
@@ -358,6 +380,7 @@ class _MapControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       tooltip: tooltip,
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
@@ -369,8 +392,8 @@ class _MapControlButton extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2.2),
             )
           : Icon(icon, size: 23),
-      color: DearColors.ink,
-      disabledColor: DearColors.disabled,
+      color: scheme.onSurface,
+      disabledColor: scheme.onSurface.withValues(alpha: 0.38),
     );
   }
 }
@@ -382,14 +405,15 @@ class _ControlDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dividerColor = Theme.of(context).colorScheme.outlineVariant;
     return horizontal
-        ? const SizedBox(
+        ? SizedBox(
             height: 30,
-            child: VerticalDivider(width: 1, color: DearColors.line),
+            child: VerticalDivider(width: 1, color: dividerColor),
           )
-        : const SizedBox(
+        : SizedBox(
             width: 30,
-            child: Divider(height: 1, color: DearColors.line),
+            child: Divider(height: 1, color: dividerColor),
           );
   }
 }
@@ -402,7 +426,7 @@ class TravelMapLoadingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: DearColors.backgroundTop,
+      color: Theme.of(context).colorScheme.surfaceContainerLowest,
       child: Center(
         child: Semantics(
           liveRegion: true,
@@ -430,18 +454,19 @@ class TravelMapErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ColoredBox(
-      color: DearColors.backgroundTop,
+      color: scheme.surfaceContainerLowest,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.cloud_off_rounded,
                 size: 48,
-                color: DearColors.muted,
+                color: scheme.onSurfaceVariant,
               ),
               const SizedBox(height: 12),
               Text(message, textAlign: TextAlign.center),

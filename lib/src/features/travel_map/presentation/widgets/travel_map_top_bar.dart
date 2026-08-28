@@ -1,4 +1,3 @@
-import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:flutter/material.dart';
 
 enum TravelMapSection { korea, world }
@@ -24,8 +23,9 @@ class TravelMapTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return AppBar(
-      backgroundColor: Colors.white.withValues(alpha: 0.94),
+      backgroundColor: scheme.surface.withValues(alpha: 0.94),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       toolbarHeight: 60,
@@ -39,7 +39,7 @@ class TravelMapTopBar extends StatelessWidget implements PreferredSizeWidget {
       title: Text(
         '여행 지도',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: DearColors.ink,
+              color: scheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
       ),
@@ -113,6 +113,7 @@ class TravelMapSegments extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       container: true,
       label: '국내와 세계 여행 지도 선택',
@@ -120,9 +121,9 @@ class TravelMapSegments extends StatelessWidget {
         height: 54,
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: DearColors.blushDeep,
+          color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: DearColors.line),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Row(
           children: [
@@ -168,12 +169,13 @@ class _TravelMapSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       selected: selected,
       button: true,
       label: '$label 여행 지도',
       child: Material(
-        color: selected ? Colors.white : Colors.transparent,
+        color: selected ? scheme.surface : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         elevation: selected ? 1 : 0,
         child: InkWell(
@@ -184,9 +186,8 @@ class _TravelMapSegment extends StatelessWidget {
               child: Text(
                 label,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: selected
-                          ? DearColors.coralText
-                          : DearColors.secondary,
+                      color:
+                          selected ? scheme.primary : scheme.onSurfaceVariant,
                       fontWeight: FontWeight.w900,
                     ),
               ),
@@ -208,7 +209,11 @@ class _MenuLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 21, color: DearColors.secondary),
+        Icon(
+          icon,
+          size: 21,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         const SizedBox(width: 12),
         Text(label),
       ],
