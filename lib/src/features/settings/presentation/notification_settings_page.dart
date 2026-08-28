@@ -16,32 +16,73 @@ class NotificationSettingsPage extends ConsumerStatefulWidget {
 
 class _NotificationSettingsPageState
     extends ConsumerState<NotificationSettingsPage> {
+  String? _activeUserId;
+  int _userGeneration = 0;
+  NotificationPreferences? _baseline;
   NotificationPreferences? _draft;
+  NotificationPreferences? _lastProviderSnapshot;
+  String? _preferencesError;
+  String? _saveError;
+  bool _preferencesRetrying = false;
   bool _saving = false;
   bool _registering = false;
 
   Future<void> _save() async {
     final draft = _draft;
-    if (draft == null || _saving) return;
+    final userId = _activeUserId;
+    final generation = _userGeneration;
+    if (draft == null || userId == null || draft.userId != userId || _saving) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref.read(saveNotificationPreferencesProvider)(draft);
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _userGeneration ||
+          userId != _activeUserId) {
+        return;
+      }
+      setState(() {
+        _baseline = draft;
+        _saveError = null;
+        _saving = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('알림 설정을 저장했어요.')),
       );
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(toFriendlyErrorMessage(error))),
-      );
+      if (!mounted ||
+          generation != _userGeneration ||
+          userId != _activeUserId) {
+        return;
+      }
+      setState(() {
+        _saveError = _notificationSettingsError('저장하지', error);
+        _saving = false;
+      });
+    }
+  }
+
+  Future<void> _retryPreferences() async {
+    final userId = _activeUserId;
+    final generation = _userGeneration;
+    if (userId == null || _preferencesRetrying || _saving) return;
+    setState(() => _preferencesRetrying = true);
+    ref.invalidate(notificationPreferencesProvider(userId));
+    try {
+      await ref.read(notificationPreferencesProvider(userId).future);
+    } catch (_) {
+      // The provider error is rendered inline with the preserved draft.
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && generation == _userGeneration && userId == _activeUserId) {
+        setState(() => _preferencesRetrying = false);
+      }
     }
   }
 
   Future<void> _connectSystemNotifications(String userId) async {
     if (_registering) return;
+    final generation = _userGeneration;
     setState(() => _registering = true);
     try {
       await ref
@@ -49,7 +90,11 @@ class _NotificationSettingsPageState
           .syncForSession(userId: userId);
       ref.invalidate(notificationSystemStatusProvider);
       final status = await ref.read(notificationSystemStatusProvider.future);
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _userGeneration ||
+          userId != _activeUserId) {
+        return;
+      }
       final message = status.isAuthorized && status.hasFcmToken
           ? '이 기기의 알림 연결을 완료했어요.'
           : '시스템 설정에서 Dear 알림을 허용해 주세요.';
@@ -57,12 +102,18 @@ class _NotificationSettingsPageState
         SnackBar(content: Text(message)),
       );
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _userGeneration ||
+          userId != _activeUserId) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(toFriendlyErrorMessage(error))),
       );
     } finally {
-      if (mounted) setState(() => _registering = false);
+      if (mounted && generation == _userGeneration && userId == _activeUserId) {
+        setState(() => _registering = false);
+      }
     }
   }
 
@@ -70,14 +121,58 @@ class _NotificationSettingsPageState
     NotificationPreferences Function(NotificationPreferences current) change,
   ) {
     final current = _draft;
-    if (current == null) return;
+    if (current == null || _saving || current.userId != _activeUserId) return;
     setState(() => _draft = change(current));
+  }
+
+  void _activateUser(String? userId) {
+    if (_activeUserId == userId) return;
+    _activeUserId = userId;
+    _userGeneration += 1;
+    _baseline = null;
+    _draft = null;
+    _lastProviderSnapshot = null;
+    _preferencesError = null;
+    _saveError = null;
+    _preferencesRetrying = false;
+    _saving = false;
+    _registering = false;
+  }
+
+  void _consumePreferences(
+    String userId,
+    AsyncValue<NotificationPreferences> preferencesAsync,
+  ) {
+    if (preferencesAsync.hasError) {
+      _preferencesError =
+          _notificationSettingsError('불러오지', preferencesAsync.error!);
+      return;
+    }
+
+    final loaded = preferencesAsync.valueOrNull;
+    if (loaded == null || loaded.userId != userId) {
+      return;
+    }
+    _preferencesError = null;
+    if (_samePreferences(_lastProviderSnapshot, loaded)) return;
+
+    final previousBaseline = _baseline;
+    final currentDraft = _draft;
+    final hasUnsavedChanges = previousBaseline != null &&
+        currentDraft != null &&
+        !_samePreferences(previousBaseline, currentDraft);
+    _lastProviderSnapshot = loaded;
+    _baseline = loaded;
+    if (currentDraft == null || !hasUnsavedChanges) {
+      _draft = loaded;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(authSessionProvider).valueOrNull;
     final userId = session?.user.id;
+    _activateUser(userId);
     if (userId == null) {
       return const Scaffold(
         body: Center(child: Text('로그인 후 알림을 설정할 수 있어요.')),
@@ -86,128 +181,190 @@ class _NotificationSettingsPageState
 
     final preferencesAsync = ref.watch(notificationPreferencesProvider(userId));
     final systemStatusAsync = ref.watch(notificationSystemStatusProvider);
-    final loaded = preferencesAsync.valueOrNull;
-    if (_draft == null && loaded != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _draft == null) setState(() => _draft = loaded);
-      });
-    }
+    _consumePreferences(userId, preferencesAsync);
 
     return Scaffold(
       appBar: AppBar(title: const Text('알림 설정')),
       body: DearBackground(
-        child: preferencesAsync.when(
-          loading: () => const _NotificationSettingsSkeleton(),
-          error: (error, _) => _SettingsError(
-            message: toFriendlyErrorMessage(error),
-            onRetry: () =>
-                ref.invalidate(notificationPreferencesProvider(userId)),
-          ),
-          data: (preferences) {
-            final draft = _draft ?? preferences;
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              children: [
-                _SystemStatusCard(
-                  status: systemStatusAsync.valueOrNull,
-                  serverSynced: preferences.isServerSynced,
-                  loading: systemStatusAsync.isLoading || _registering,
-                  onConnect: () => _connectSystemNotifications(userId),
-                ),
-                const SizedBox(height: 24),
-                const _SectionLabel('받을 알림'),
-                const SizedBox(height: 10),
-                _SettingsSection(
-                  children: [
-                    _PreferenceSwitchRow(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      title: '메시지 알림',
-                      subtitle: '상대방이 메시지를 보내면 알려드려요',
-                      value: draft.messageEnabled,
-                      onChanged: (value) => _update(
-                        (current) => current.copyWith(messageEnabled: value),
-                      ),
-                    ),
-                    _PreferenceSwitchRow(
-                      icon: Icons.image_outlined,
-                      title: '사진 알림',
-                      subtitle: '사진 메시지가 도착하면 알려드려요',
-                      value: draft.imageEnabled,
-                      onChanged: (value) => _update(
-                        (current) => current.copyWith(imageEnabled: value),
-                      ),
-                    ),
-                    _PreferenceSwitchRow(
-                      icon: Icons.favorite_border_rounded,
-                      title: '기념일 알림',
-                      subtitle: '100일·주년·직접 추가한 날을 축하해요',
-                      value: draft.anniversaryEnabled,
-                      onChanged: (value) => _update(
-                        (current) =>
-                            current.copyWith(anniversaryEnabled: value),
-                      ),
-                    ),
-                    _PreferenceSwitchRow(
-                      icon: Icons.grid_4x4_rounded,
-                      title: '오목 초대 알림',
-                      subtitle: '상대방의 대국 신청과 재대결을 알려드려요',
-                      value: draft.gameEnabled,
-                      showDivider: false,
-                      onChanged: (value) => _update(
-                        (current) => current.copyWith(gameEnabled: value),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                const _SectionLabel('시간'),
-                const SizedBox(height: 10),
-                _SettingsSection(
-                  children: [
-                    _TimeSelectorRow(
-                      icon: Icons.celebration_outlined,
-                      title: '기념일 축하 시간',
-                      subtitle: '대한민국 시간 기준',
-                      hour: draft.anniversaryHour,
-                      enabled: draft.anniversaryEnabled,
-                      onChanged: (value) => _update(
-                        (current) => current.copyWith(anniversaryHour: value),
-                      ),
-                    ),
-                    _PreferenceSwitchRow(
-                      icon: Icons.bedtime_outlined,
-                      title: '무음 시간',
-                      subtitle: '알림은 받되 소리 없이 표시해요',
-                      value: draft.quietEnabled,
-                      showDivider: !draft.quietEnabled,
-                      onChanged: (value) => _update(
-                        (current) => current.copyWith(quietEnabled: value),
-                      ),
-                    ),
-                    if (draft.quietEnabled)
-                      _QuietHoursRow(
-                        startHour: draft.quietStartHour,
-                        endHour: draft.quietEndHour,
-                        onStartChanged: (value) => _update(
-                          (current) => current.copyWith(quietStartHour: value),
-                        ),
-                        onEndChanged: (value) => _update(
-                          (current) => current.copyWith(quietEndHour: value),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                DearGradientButton(
-                  label: _saving ? '저장 중...' : '변경 사항 저장',
-                  icon: Icons.check_rounded,
-                  onPressed: _saving ? null : _save,
-                ),
-              ],
-            );
-          },
+        child: _buildPreferencesBody(
+          userId: userId,
+          preferencesAsync: preferencesAsync,
+          systemStatusAsync: systemStatusAsync,
         ),
       ),
+    );
+  }
+
+  Widget _buildPreferencesBody({
+    required String userId,
+    required AsyncValue<NotificationPreferences> preferencesAsync,
+    required AsyncValue<NotificationSystemStatus> systemStatusAsync,
+  }) {
+    final draft = _draft;
+    if (draft == null) {
+      if (_preferencesError != null) {
+        return ListView(
+          key: const Key('notification-preferences-initial-error'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(DearSpacing.space24),
+          children: [
+            const SizedBox(height: 120),
+            DearInlineError(
+              key: const Key('notification-preferences-error'),
+              message: _preferencesError!,
+              onRetry: _saving ? null : _retryPreferences,
+              retrying: _preferencesRetrying,
+            ),
+          ],
+        );
+      }
+      return const _NotificationSettingsSkeleton();
+    }
+
+    final inputsEnabled = !_saving;
+    return ListView(
+      key: const Key('notification-settings-content'),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      children: [
+        if (_preferencesError != null) ...[
+          DearInlineError(
+            key: const Key('notification-preferences-error'),
+            message: _preferencesError!,
+            onRetry: _saving ? null : _retryPreferences,
+            retrying: _preferencesRetrying,
+          ),
+          const SizedBox(height: DearSpacing.space16),
+        ] else if (preferencesAsync.isLoading) ...[
+          const DearInlineLoading(
+            key: Key('notification-preferences-refreshing'),
+            label: '알림 설정을 새로고침하는 중',
+          ),
+          const SizedBox(height: DearSpacing.space16),
+        ],
+        _SystemStatusCard(
+          status: systemStatusAsync.valueOrNull,
+          serverSynced: (_baseline ?? draft).isServerSynced,
+          loading: systemStatusAsync.isLoading || _registering,
+          onConnect: () => _connectSystemNotifications(userId),
+        ),
+        const SizedBox(height: 24),
+        const _SectionLabel('받을 알림'),
+        const SizedBox(height: 10),
+        _SettingsSection(
+          children: [
+            _PreferenceSwitchRow(
+              icon: Icons.chat_bubble_outline_rounded,
+              title: '메시지 알림',
+              subtitle: '상대방이 메시지를 보내면 알려드려요',
+              value: draft.messageEnabled,
+              onChanged: inputsEnabled
+                  ? (value) => _update(
+                        (current) => current.copyWith(messageEnabled: value),
+                      )
+                  : null,
+            ),
+            _PreferenceSwitchRow(
+              icon: Icons.image_outlined,
+              title: '사진 알림',
+              subtitle: '사진 메시지가 도착하면 알려드려요',
+              value: draft.imageEnabled,
+              onChanged: inputsEnabled
+                  ? (value) => _update(
+                        (current) => current.copyWith(imageEnabled: value),
+                      )
+                  : null,
+            ),
+            _PreferenceSwitchRow(
+              icon: Icons.favorite_border_rounded,
+              title: '기념일 알림',
+              subtitle: '100일·주년·직접 추가한 날을 축하해요',
+              value: draft.anniversaryEnabled,
+              onChanged: inputsEnabled
+                  ? (value) => _update(
+                        (current) =>
+                            current.copyWith(anniversaryEnabled: value),
+                      )
+                  : null,
+            ),
+            _PreferenceSwitchRow(
+              icon: Icons.grid_4x4_rounded,
+              title: '오목 초대 알림',
+              subtitle: '상대방의 대국 신청과 재대결을 알려드려요',
+              value: draft.gameEnabled,
+              showDivider: false,
+              onChanged: inputsEnabled
+                  ? (value) => _update(
+                        (current) => current.copyWith(gameEnabled: value),
+                      )
+                  : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        const _SectionLabel('시간'),
+        const SizedBox(height: 10),
+        _SettingsSection(
+          children: [
+            _TimeSelectorRow(
+              icon: Icons.celebration_outlined,
+              title: '기념일 축하 시간',
+              subtitle: '대한민국 시간 기준',
+              hour: draft.anniversaryHour,
+              enabled: draft.anniversaryEnabled,
+              onChanged: inputsEnabled
+                  ? (value) => _update(
+                        (current) => current.copyWith(anniversaryHour: value),
+                      )
+                  : null,
+            ),
+            _PreferenceSwitchRow(
+              icon: Icons.bedtime_outlined,
+              title: '무음 시간',
+              subtitle: '알림은 받되 소리 없이 표시해요',
+              value: draft.quietEnabled,
+              showDivider: !draft.quietEnabled,
+              onChanged: inputsEnabled
+                  ? (value) => _update(
+                        (current) => current.copyWith(quietEnabled: value),
+                      )
+                  : null,
+            ),
+            if (draft.quietEnabled)
+              _QuietHoursRow(
+                startHour: draft.quietStartHour,
+                endHour: draft.quietEndHour,
+                onStartChanged: inputsEnabled
+                    ? (value) => _update(
+                          (current) => current.copyWith(quietStartHour: value),
+                        )
+                    : null,
+                onEndChanged: inputsEnabled
+                    ? (value) => _update(
+                          (current) => current.copyWith(quietEndHour: value),
+                        )
+                    : null,
+              ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        if (_saveError != null) ...[
+          DearInlineError(
+            key: const Key('notification-save-error'),
+            message: _saveError!,
+            onRetry: _save,
+            retrying: _saving,
+            retryLabel: '다시 저장',
+            retryingLabel: '다시 저장하는 중',
+          ),
+          const SizedBox(height: DearSpacing.space12),
+        ],
+        DearGradientButton(
+          key: const Key('notification-save-button'),
+          label: _saving ? '저장 중...' : '변경 사항 저장',
+          icon: Icons.check_rounded,
+          onPressed: _saving ? null : _save,
+        ),
+      ],
     );
   }
 }
@@ -242,81 +399,116 @@ class _SystemStatusCard extends StatelessWidget {
         : connected
             ? '설정한 메시지와 기념일 알림을 받을 수 있어요.'
             : '한 번만 연결하면 이후에는 자동으로 유지돼요.';
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: connected ? const Color(0xFFF2FAF6) : DearColors.coralSoft,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: connected ? const Color(0xFFB8E2D2) : DearColors.line,
+    final details = Column(
+      key: const Key('notification-system-details'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: DearColors.ink,
+              ),
         ),
-      ),
-      child: Row(
-        children: [
-          DearIconBubble(
-            icon: connected
-                ? Icons.notifications_active_rounded
-                : Icons.notifications_none_rounded,
-            size: 48,
-            iconSize: 24,
-            background: Colors.white,
-            color: connected ? const Color(0xFF3A8D70) : DearColors.coral,
+        const SizedBox(height: 3),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: DearColors.secondary,
+                height: 1.35,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _ConnectionStatusChip(
+              label: status?.permissionLabel ?? '권한 확인 중',
+              connected: authorized,
+            ),
+            _ConnectionStatusChip(
+              label: 'FCM',
+              connected: status?.hasFcmToken == true,
+            ),
+            _ConnectionStatusChip(
+              label: 'APNs',
+              connected: status?.hasApnsToken == true,
+            ),
+            _ConnectionStatusChip(
+              label: '서버 설정',
+              connected: serverSynced,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    Widget icon() => DearIconBubble(
+          icon: connected
+              ? Icons.notifications_active_rounded
+              : Icons.notifications_none_rounded,
+          size: 48,
+          iconSize: 24,
+          background: Colors.white,
+          color: connected ? const Color(0xFF3A8D70) : DearColors.coral,
+        );
+
+    Widget connectButton({required bool expanded}) => SizedBox(
+          width: expanded ? double.infinity : null,
+          height: DearTouchTargets.minimum,
+          child: TextButton(
+            key: const Key('notification-connect-button'),
+            onPressed: loading ? null : onConnect,
+            child: Text(loading ? '연결 중' : '연결'),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: DearColors.ink,
-                      ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DearColors.secondary,
-                        height: 1.35,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final reflow = MediaQuery.textScalerOf(context).scale(1) >= 1.6 ||
+            constraints.maxWidth < 320;
+        return Container(
+          key: const Key('notification-system-status-card'),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: connected ? const Color(0xFFF2FAF6) : DearColors.coralSoft,
+            borderRadius: BorderRadius.circular(DearRadii.control),
+            border: Border.all(
+              color: connected ? const Color(0xFFB8E2D2) : DearColors.line,
+            ),
+          ),
+          child: reflow
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ConnectionStatusChip(
-                      label: status?.permissionLabel ?? '권한 확인 중',
-                      connected: authorized,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ExcludeSemantics(child: icon()),
+                        const SizedBox(width: DearSpacing.space12),
+                        Expanded(child: details),
+                      ],
                     ),
-                    _ConnectionStatusChip(
-                      label: 'FCM',
-                      connected: status?.hasFcmToken == true,
-                    ),
-                    _ConnectionStatusChip(
-                      label: 'APNs',
-                      connected: status?.hasApnsToken == true,
-                    ),
-                    _ConnectionStatusChip(
-                      label: '서버 설정',
-                      connected: serverSynced,
-                    ),
+                    if (!connected) ...[
+                      const SizedBox(height: DearSpacing.space12),
+                      connectButton(expanded: true),
+                    ],
+                  ],
+                )
+              : Row(
+                  children: [
+                    ExcludeSemantics(child: icon()),
+                    const SizedBox(width: DearSpacing.space12),
+                    Expanded(child: details),
+                    if (!connected) ...[
+                      const SizedBox(width: DearSpacing.space8),
+                      connectButton(expanded: false),
+                    ],
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (!connected)
-            TextButton(
-              onPressed: loading ? null : onConnect,
-              child: Text(loading ? '연결 중' : '연결'),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -414,7 +606,7 @@ class _PreferenceSwitchRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
   final bool showDivider;
 
   @override
@@ -451,41 +643,54 @@ class _TimeSelectorRow extends StatelessWidget {
   final String subtitle;
   final int hour;
   final bool enabled;
-  final ValueChanged<int> onChanged;
+  final ValueChanged<int>? onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final selectorEnabled = enabled && onChanged != null;
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
-          child: Row(
-            children: [
-              Icon(icon,
-                  color: enabled ? DearColors.coral : DearColors.disabled),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: DearColors.secondary,
-                          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final reflow = MediaQuery.textScalerOf(context).scale(1) >= 1.6 ||
+                  constraints.maxWidth < 280;
+              final details = Row(
+                key: const Key('notification-anniversary-time-details'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    icon,
+                    color: enabled ? DearColors.coral : DearColors.disabled,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: DearColors.secondary,
+                                  ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              DropdownButtonHideUnderline(
+                  ),
+                ],
+              );
+              final dropdown = DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
+                  key: const Key('notification-anniversary-hour-dropdown'),
                   value: hour,
-                  borderRadius: BorderRadius.circular(12),
-                  onChanged: enabled
+                  borderRadius: BorderRadius.circular(DearRadii.chip),
+                  onChanged: selectorEnabled
                       ? (value) {
-                          if (value != null) onChanged(value);
+                          if (value != null) onChanged?.call(value);
                         }
                       : null,
                   items: List.generate(
@@ -496,8 +701,28 @@ class _TimeSelectorRow extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
-            ],
+              );
+              if (reflow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    details,
+                    const SizedBox(height: DearSpacing.space8),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: dropdown,
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: details),
+                  const SizedBox(width: DearSpacing.space8),
+                  dropdown,
+                ],
+              );
+            },
           ),
         ),
         const Divider(height: 1, indent: 54, color: DearColors.line),
@@ -516,38 +741,73 @@ class _QuietHoursRow extends StatelessWidget {
 
   final int startHour;
   final int endHour;
-  final ValueChanged<int> onStartChanged;
-  final ValueChanged<int> onEndChanged;
+  final ValueChanged<int>? onStartChanged;
+  final ValueChanged<int>? onEndChanged;
 
   @override
   Widget build(BuildContext context) {
-    Widget selector(String label, int value, ValueChanged<int> onChanged) {
-      return Expanded(
-        child: DropdownButtonFormField<int>(
-          initialValue: value,
-          decoration: InputDecoration(labelText: label, isDense: true),
-          items: List.generate(
-            24,
-            (hour) => DropdownMenuItem(
-              value: hour,
-              child: Text(_hourLabel(hour)),
-            ),
+    Widget selector({
+      required String label,
+      required int value,
+      required ValueChanged<int>? onChanged,
+      required Key key,
+    }) {
+      return DropdownButtonFormField<int>(
+        key: key,
+        initialValue: value,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: label, isDense: true),
+        items: List.generate(
+          24,
+          (hour) => DropdownMenuItem(
+            value: hour,
+            child: Text(_hourLabel(hour)),
           ),
-          onChanged: (next) {
-            if (next != null) onChanged(next);
-          },
         ),
+        onChanged: onChanged == null
+            ? null
+            : (next) {
+                if (next != null) onChanged(next);
+              },
       );
     }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-      child: Row(
-        children: [
-          selector('시작', startHour, onStartChanged),
-          const SizedBox(width: 10),
-          selector('종료', endHour, onEndChanged),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final reflow = MediaQuery.textScalerOf(context).scale(1) >= 1.6 ||
+              constraints.maxWidth < 280;
+          final start = selector(
+            label: '시작',
+            value: startHour,
+            onChanged: onStartChanged,
+            key: const Key('notification-quiet-start-dropdown'),
+          );
+          final end = selector(
+            label: '종료',
+            value: endHour,
+            onChanged: onEndChanged,
+            key: const Key('notification-quiet-end-dropdown'),
+          );
+          if (reflow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                start,
+                const SizedBox(height: DearSpacing.space12),
+                end,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: start),
+              const SizedBox(width: DearSpacing.space12),
+              Expanded(child: end),
+            ],
+          );
+        },
       ),
     );
   }
@@ -574,38 +834,31 @@ class _NotificationSettingsSkeleton extends StatelessWidget {
   }
 }
 
-class _SettingsError extends StatelessWidget {
-  const _SettingsError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_rounded, size: 42),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 14),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('다시 시도'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 String _hourLabel(int hour) {
   final period = hour < 12 ? '오전' : '오후';
   final display = hour % 12 == 0 ? 12 : hour % 12;
   return '$period $display시';
+}
+
+String _notificationSettingsError(String action, Object error) {
+  return '알림 설정을 $action 못했어요. ${toFriendlyErrorMessage(error)}';
+}
+
+bool _samePreferences(
+  NotificationPreferences? first,
+  NotificationPreferences? second,
+) {
+  if (identical(first, second)) return true;
+  if (first == null || second == null) return false;
+  return first.userId == second.userId &&
+      first.messageEnabled == second.messageEnabled &&
+      first.imageEnabled == second.imageEnabled &&
+      first.anniversaryEnabled == second.anniversaryEnabled &&
+      first.gameEnabled == second.gameEnabled &&
+      first.quietEnabled == second.quietEnabled &&
+      first.quietStartHour == second.quietStartHour &&
+      first.quietEndHour == second.quietEndHour &&
+      first.anniversaryHour == second.anniversaryHour &&
+      first.timezone == second.timezone &&
+      first.isServerSynced == second.isServerSynced;
 }
