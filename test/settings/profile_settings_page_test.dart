@@ -177,6 +177,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('커플 연결을 해제할까요?'), findsOneWidget);
+    expect(find.textContaining('두 사람 모두 즉시 연결이 해제'), findsOneWidget);
     expect(disconnectCalled, isFalse);
 
     await tester.tap(find.widgetWithText(FilledButton, '연결 해제'));
@@ -184,6 +185,65 @@ void main() {
 
     expect(disconnectCalled, isTrue);
     expect(find.text('pairing-destination'), findsOneWidget);
+  });
+
+  testWidgets('계정 삭제는 복구 불가 범위와 확인 문구를 요구한다', (tester) async {
+    var deleteCalled = false;
+    await pumpMore(
+      tester,
+      overrides: [
+        deleteMyAccountProvider.overrideWithValue(() async {
+          deleteCalled = true;
+        }),
+      ],
+    );
+
+    final deleteTile = find.byKey(const ValueKey('more-delete-account'));
+    await tester.scrollUntilVisible(
+      deleteTile,
+      260,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await Scrollable.ensureVisible(
+      tester.element(deleteTile),
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 1),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(deleteTile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('계정을 영구 삭제할까요?'), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber_rounded), findsWidgets);
+    expect(find.textContaining('내가 올린 파일이 삭제'), findsOneWidget);
+    final confirmationMessage = tester.widget<Text>(
+      find.byKey(const ValueKey('danger-confirmation-message')),
+    );
+    expect(confirmationMessage.data, contains('데이터 내보내기'));
+    expect(deleteCalled, isFalse);
+
+    final confirmButton = find.byKey(const ValueKey('danger-confirm-button'));
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('danger-confirmation-input')),
+      '삭제',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('danger-confirmation-input')),
+      '계정 삭제',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+
+    expect(deleteCalled, isTrue);
+    expect(find.text('auth-destination'), findsOneWidget);
   });
 
   testWidgets('프로필 편집은 별도 상세 경로로 이동한다', (tester) async {

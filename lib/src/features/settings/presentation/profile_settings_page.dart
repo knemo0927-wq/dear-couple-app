@@ -178,6 +178,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         const _SectionHeading(
           title: '위험 작업',
           subtitle: '삭제되는 범위를 확인한 뒤 진행해 주세요.',
+          icon: Icons.warning_amber_rounded,
+          danger: true,
         ),
         const SizedBox(height: 10),
         _DangerGroup(
@@ -331,7 +333,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final confirmed = await _showConfirmation(
       title: '커플 연결을 해제할까요?',
       message:
-          '두 계정의 연결이 함께 해제돼요. 공유 기록의 보존·삭제 정책은 서버 정책에 따라 처리되며, 다시 연결하려면 새 초대 코드가 필요해요.',
+          '두 사람 모두 즉시 연결이 해제되고 기존 공유 기록에 접근할 수 없게 돼요. 기록은 보존 정책에 따라 서버에 유지되며, 다시 연결하려면 새 초대 코드가 필요해요.',
       confirmLabel: '연결 해제',
       destructive: true,
     );
@@ -349,9 +351,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final confirmed = await _showConfirmation(
       title: '계정을 영구 삭제할까요?',
       message:
-          '이 작업은 되돌릴 수 없어요. 내 프로필과 인증 계정이 삭제되며, 커플 공유 데이터는 서버의 보존 정책에 따라 함께 정리될 수 있어요.',
+          '내 로그인 계정과 프로필, 내가 올린 파일이 삭제되고 상대와의 연결도 해제돼요. 공유 기록은 보존 정책에 따라 정리되며 이 작업은 복구할 수 없어요. 필요한 기록은 먼저 데이터 내보내기를 이용해 주세요.',
       confirmLabel: '계정 영구 삭제',
       destructive: true,
+      requiredPhrase: '계정 삭제',
     );
     if (!confirmed || !mounted) return;
     await _runAction(
@@ -368,25 +371,16 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     required String message,
     required String confirmLabel,
     bool destructive = false,
+    String? requiredPhrase,
   }) async {
     return await showDialog<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(title),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                style: destructive
-                    ? FilledButton.styleFrom(backgroundColor: DearColors.error)
-                    : null,
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(confirmLabel),
-              ),
-            ],
+          builder: (dialogContext) => _ConfirmationDialog(
+            title: title,
+            message: message,
+            confirmLabel: confirmLabel,
+            destructive: destructive,
+            requiredPhrase: requiredPhrase,
           ),
         ) ??
         false;
@@ -417,6 +411,102 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _ConfirmationDialog extends StatefulWidget {
+  const _ConfirmationDialog({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    required this.destructive,
+    this.requiredPhrase,
+  });
+
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final bool destructive;
+  final String? requiredPhrase;
+
+  @override
+  State<_ConfirmationDialog> createState() => _ConfirmationDialogState();
+}
+
+class _ConfirmationDialogState extends State<_ConfirmationDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _confirmed {
+    final phrase = widget.requiredPhrase;
+    return phrase == null || _controller.text.trim() == phrase;
+  }
+
+  void _submit() {
+    if (_confirmed) Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final phrase = widget.requiredPhrase;
+    return AlertDialog(
+      icon: widget.destructive
+          ? const Icon(
+              Icons.warning_amber_rounded,
+              color: DearColors.error,
+              size: DearIconSizes.large,
+            )
+          : null,
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.message,
+              key: const ValueKey('danger-confirmation-message'),
+            ),
+            if (phrase != null) ...[
+              const SizedBox(height: DearSpacing.space20),
+              TextField(
+                key: const ValueKey('danger-confirmation-input'),
+                controller: _controller,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  labelText: '확인 문구',
+                  hintText: phrase,
+                  helperText: '계속하려면 “$phrase”를 정확히 입력해 주세요.',
+                  helperMaxLines: 2,
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _submit(),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          key: const ValueKey('danger-confirm-button'),
+          style: widget.destructive
+              ? FilledButton.styleFrom(backgroundColor: DearColors.error)
+              : null,
+          onPressed: _confirmed ? _submit : null,
+          child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
   }
 }
 
@@ -878,22 +968,45 @@ class _FeatureButton extends StatelessWidget {
 }
 
 class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({required this.title, this.subtitle});
+  const _SectionHeading({
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.danger = false,
+  });
 
   final String title;
   final String? subtitle;
+  final IconData? icon;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: DearColors.ink,
-                fontWeight: FontWeight.w800,
+        Row(
+          children: [
+            if (icon != null) ...[
+              ExcludeSemantics(
+                child: Icon(
+                  icon,
+                  size: DearIconSizes.medium,
+                  color: danger ? DearColors.error : DearColors.coralText,
+                ),
               ),
+              const SizedBox(width: DearSpacing.space8),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: danger ? DearColors.error : DearColors.ink,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
+          ],
         ),
         if (subtitle != null) ...[
           const SizedBox(height: 4),
@@ -1000,8 +1113,6 @@ class _MoreTile extends StatelessWidget {
       ),
       subtitle: Text(
         subtitle,
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
       ),
       trailing: busy
           ? const SizedBox.square(
