@@ -326,8 +326,7 @@ class _HomeGreeting extends StatelessWidget {
                 ),
               ],
             ),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
+            key: const ValueKey('home-greeting-title'),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: DearColors.ink,
                   fontSize: 21,
@@ -532,92 +531,92 @@ class _RelationshipHero extends StatelessWidget {
 
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
 
-    return GestureDetector(
-      onTap: onOpen,
-      child: SizedBox(
-        key: const ValueKey('relationship-hero'),
-        height: largeText ? 232 : 168,
-        child: DearCard(
-          padding: EdgeInsets.zero,
-          radius: 28,
-          gradient: DearGradients.softCard,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final imageWidth =
-                    constraints.maxWidth * (largeText ? 0.3 : 0.4);
-                final textWidth =
-                    constraints.maxWidth * (largeText ? 0.7 : 0.58);
+    final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: DearColors.coralText,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        );
+    final ddayStyle = Theme.of(context).textTheme.displayMedium?.copyWith(
+          color: DearColors.coralText,
+          fontWeight: FontWeight.w800,
+          fontSize: 44,
+          letterSpacing: 0,
+          height: 0.96,
+        );
+    final dateStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: DearColors.secondary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+        );
 
-                return Stack(
-                  children: [
-                    Positioned(
-                      right: largeText ? 12 : 24,
-                      bottom: 10,
-                      width: imageWidth,
-                      height: largeText ? 104 : 132,
+    final content = largeText
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('우리의 연애', style: titleStyle),
+                const SizedBox(height: 12),
+                Text(dday, style: ddayStyle),
+                const SizedBox(height: 8),
+                Text('$firstDateLabel부터 함께 ♥', style: dateStyle),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: ExcludeSemantics(
+                    child: SizedBox(
+                      width: 132,
+                      height: 104,
                       child: Image.asset(
                         'assets/images/dear_home_hero_mascots.png',
                         fit: BoxFit.contain,
                         alignment: Alignment.bottomRight,
                       ),
                     ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : SizedBox(
+            height: 168,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final imageWidth = constraints.maxWidth * 0.4;
+                final textWidth = constraints.maxWidth * 0.58;
+
+                return Stack(
+                  children: [
                     Positioned(
-                      left: largeText ? 22 : 28,
-                      top: largeText ? 24 : 32,
+                      right: 24,
+                      bottom: 10,
+                      width: imageWidth,
+                      height: 132,
+                      child: ExcludeSemantics(
+                        child: Image.asset(
+                          'assets/images/dear_home_hero_mascots.png',
+                          fit: BoxFit.contain,
+                          alignment: Alignment.bottomRight,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 28,
+                      top: 32,
                       width: textWidth,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text('우리의 연애', style: titleStyle),
+                          const SizedBox(height: 20),
+                          Text(dday, maxLines: 1, style: ddayStyle),
+                          const SizedBox(height: 13),
                           Text(
-                            '우리의 연애',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(
-                                  color: DearColors.coralText,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.1,
-                                ),
-                          ),
-                          SizedBox(height: largeText ? 12 : 20),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              dday,
-                              maxLines: 1,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .displayMedium
-                                  ?.copyWith(
-                                    color: DearColors.coralText,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 44,
-                                    letterSpacing: 0,
-                                    height: 0.96,
-                                  ),
-                            ),
-                          ),
-                          SizedBox(height: largeText ? 8 : 13),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '$firstDateLabel부터 함께 ♥',
-                              maxLines: 1,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: DearColors.secondary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.2,
-                                  ),
-                            ),
+                            '$firstDateLabel부터 함께 ♥',
+                            maxLines: 2,
+                            style: dateStyle,
                           ),
                         ],
                       ),
@@ -625,6 +624,26 @@ class _RelationshipHero extends StatelessWidget {
                   ],
                 );
               },
+            ),
+          );
+
+    return Semantics(
+      key: const ValueKey('relationship-hero'),
+      button: true,
+      label: '기념일, $dday, $firstDateLabel부터 함께',
+      onTap: onOpen,
+      excludeSemantics: true,
+      child: DearCard(
+        padding: EdgeInsets.zero,
+        radius: 28,
+        gradient: DearGradients.softCard,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onOpen,
+              child: content,
             ),
           ),
         ),
@@ -677,9 +696,12 @@ class _PrimaryChatCard extends StatelessWidget {
                         children: [
                           Flexible(
                             child: Text(
+                              key: const ValueKey('primary-chat-title'),
                               '$partnerName님과 채팅',
-                              maxLines: largeText ? 2 : 1,
-                              overflow: TextOverflow.ellipsis,
+                              maxLines: largeText ? null : 1,
+                              overflow: largeText
+                                  ? TextOverflow.visible
+                                  : TextOverflow.ellipsis,
                               style: Theme.of(context)
                                   .textTheme
                                   .titleLarge
@@ -721,11 +743,14 @@ class _PrimaryChatCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
+                        key: const ValueKey('primary-chat-preview'),
                         isPaired
                             ? (latestPreview ?? '아직 대화가 없어요')
                             : '먼저 연결을 완료해 주세요.',
-                        maxLines: largeText ? 2 : 1,
-                        overflow: TextOverflow.ellipsis,
+                        maxLines: largeText ? null : 1,
+                        overflow: largeText
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: DearColors.secondary,
                               fontSize: 14,
@@ -803,10 +828,12 @@ class _PrimaryChatCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(width: 8),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 24,
-                  color: DearColors.secondary,
+                const ExcludeSemantics(
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 24,
+                    color: DearColors.secondary,
+                  ),
                 ),
               ],
             ),
@@ -960,9 +987,11 @@ class _NextAnniversaryCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: DearColors.secondary,
+                    const ExcludeSemantics(
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        color: DearColors.secondary,
+                      ),
                     ),
                   ],
                 ),
@@ -1014,37 +1043,50 @@ class _RecentMemoriesStrip extends ConsumerWidget {
     final photosAsync = coupleId == null
         ? const AsyncValue<List<MemoryAlbumPhoto>>.data(<MemoryAlbumPhoto>[])
         : ref.watch(recentMemoryAlbumPhotosProvider(coupleId));
+    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final sectionTitle = Text(
+      '최근 추억',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: DearColors.ink,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+    );
+    final moreButton = TextButton(
+      onPressed: coupleId == null ? null : () => context.go('/memory-album'),
+      style: TextButton.styleFrom(
+        foregroundColor: DearColors.secondary,
+        minimumSize: const Size(44, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        textStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      child: const Text('더보기'),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              '최근 추억',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: DearColors.ink,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
+        if (largeText)
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 4,
+              children: [sectionTitle, moreButton],
             ),
-            const Spacer(),
-            TextButton(
-              onPressed:
-                  coupleId == null ? null : () => context.go('/memory-album'),
-              style: TextButton.styleFrom(
-                foregroundColor: DearColors.secondary,
-                minimumSize: const Size(44, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              child: const Text('더보기'),
-            ),
-          ],
-        ),
+          )
+        else
+          Row(
+            children: [
+              sectionTitle,
+              const Spacer(),
+              moreButton,
+            ],
+          ),
         const SizedBox(height: 14),
         photosAsync.when(
           loading: () => const _RecentMemoriesLoadingStrip(),
@@ -1130,9 +1172,11 @@ class _RecentMemoriesEmptyStrip extends StatelessWidget {
                         ),
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: DearColors.secondary,
+                const ExcludeSemantics(
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    color: DearColors.secondary,
+                  ),
                 ),
               ],
             ),
@@ -1386,15 +1430,26 @@ class _FeatureGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    if (largeText) {
+      return Column(
+        children: [
+          for (var index = 0; index < items.length; index++) ...[
+            if (index > 0) const SizedBox(height: 8),
+            _FeatureTile(item: items[index]),
+          ],
+        ],
+      );
+    }
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         mainAxisSpacing: 8,
         crossAxisSpacing: 8,
-        mainAxisExtent: largeText ? 166 : 122,
+        mainAxisExtent: 122,
       ),
       itemBuilder: (context, index) => _FeatureTile(item: items[index]),
     );
@@ -1437,17 +1492,62 @@ class _FeatureTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DearCard(
-      padding: EdgeInsets.zero,
-      shadowOpacity: 0.55,
-      borderColor: DearColors.line,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(DearRadii.medium),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(DearRadii.medium),
-          onTap: item.onTap,
-          child: Stack(
+    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: DearColors.ink,
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+        );
+    final subtitleStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: DearColors.secondary,
+          fontSize: 11,
+        );
+    final badge = item.badgeCount > 0
+        ? Container(
+            constraints: const BoxConstraints(minWidth: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: DearColors.coral,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '${item.badgeCount}',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+          )
+        : null;
+
+    final content = largeText
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                ExcludeSemantics(
+                  child: _HomeFeatureIcon(glyph: item.glyph, size: 44),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.title, style: titleStyle),
+                      const SizedBox(height: 4),
+                      Text(item.subtitle, style: subtitleStyle),
+                    ],
+                  ),
+                ),
+                if (badge != null) ...[
+                  const SizedBox(width: 12),
+                  badge,
+                ],
+              ],
+            ),
+          )
+        : Stack(
             children: [
               Padding(
                 padding:
@@ -1455,18 +1555,16 @@ class _FeatureTile extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _HomeFeatureIcon(glyph: item.glyph, size: 44),
+                    ExcludeSemantics(
+                      child: _HomeFeatureIcon(glyph: item.glyph, size: 44),
+                    ),
                     const SizedBox(height: 7),
                     Text(
                       item.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: DearColors.ink,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
+                      style: titleStyle,
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1474,37 +1572,40 @@ class _FeatureTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: DearColors.secondary,
-                            fontSize: 11,
-                          ),
+                      style: subtitleStyle,
                     ),
                   ],
                 ),
               ),
-              if (item.badgeCount > 0)
+              if (badge != null)
                 Positioned(
                   right: 7,
                   top: 7,
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 20),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: DearColors.coral,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '${item.badgeCount}',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                  ),
+                  child: badge,
                 ),
             ],
+          );
+
+    final semanticLabel = item.badgeCount > 0
+        ? '${item.title}, ${item.subtitle}, 새 항목 ${item.badgeCount}개'
+        : '${item.title}, ${item.subtitle}';
+
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      onTap: item.onTap,
+      excludeSemantics: true,
+      child: DearCard(
+        padding: EdgeInsets.zero,
+        shadowOpacity: 0.55,
+        borderColor: DearColors.line,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(DearRadii.medium),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(DearRadii.medium),
+            onTap: item.onTap,
+            child: content,
           ),
         ),
       ),

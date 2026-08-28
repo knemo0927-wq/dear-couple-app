@@ -306,6 +306,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              leading: Icon(
+                message.isHeartedByMe
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+              ),
+              title: Text(
+                message.isHeartedByMe ? '하트 취소' : '하트 남기기',
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'heart'),
+            ),
+            ListTile(
               leading: const Icon(Icons.reply_rounded),
               title: const Text('답장'),
               onTap: () => Navigator.pop(sheetContext, 'reply'),
@@ -329,6 +340,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
       ),
     );
     if (!mounted || action == null) return;
+    if (action == 'heart') {
+      await _toggleMessageReaction(message.id);
+      return;
+    }
     if (action == 'copy' && message.body != null) {
       await Clipboard.setData(ClipboardData(text: message.body!));
       if (!mounted) return;
@@ -460,6 +475,48 @@ class _ChatPageState extends ConsumerState<ChatPage>
       _error = null;
       _retryAction = null;
     });
+  }
+
+  Future<void> _showPhotoAttachmentSheet() async {
+    if (_sending) return;
+    _dismissKeyboard();
+    final choice = await showModalBottomSheet<_PhotoAttachmentChoice>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.image_outlined),
+              title: const Text('사진 한 장 선택'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _PhotoAttachmentChoice.single,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.collections_outlined),
+              title: const Text('사진 여러 장 선택'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _PhotoAttachmentChoice.multiple,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case _PhotoAttachmentChoice.single:
+        await _pickImage();
+        return;
+      case _PhotoAttachmentChoice.multiple:
+        await _pickMultipleImages();
+        return;
+    }
   }
 
   Future<void> _pickMultipleImages({bool append = false}) async {
@@ -623,11 +680,16 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
       final target = _scrollController.position.maxScrollExtent;
       if (animated) {
-        await _scrollController.animateTo(
-          target,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-        );
+        final duration = DearMotion.duration(context, DearMotion.emphasized);
+        if (duration == DearMotion.instant) {
+          _scrollController.jumpTo(target);
+        } else {
+          await _scrollController.animateTo(
+            target,
+            duration: duration,
+            curve: DearMotion.enterCurve,
+          );
+        }
       } else {
         _scrollController.jumpTo(target);
       }
@@ -1381,23 +1443,18 @@ class _ChatPageState extends ConsumerState<ChatPage>
               ),
               child: Row(
                 children: [
-                  Container(
-                    decoration: const BoxDecoration(
-                      color: DearColors.coralSoft,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      tooltip: '사진 한 장 선택',
-                      onPressed: _sending ? null : _pickImage,
-                      icon: const Icon(Icons.image_outlined),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    tooltip: '사진 여러 장 선택',
-                    onPressed: _sending ? null : () => _pickMultipleImages(),
-                    icon: const Icon(Icons.collections_outlined),
+                  DearIconButton(
+                    key: const Key('chat-attachment-button'),
+                    tooltip: '사진 첨부',
+                    onPressed: _sending ? null : _showPhotoAttachmentSheet,
+                    icon: const Icon(Icons.add_rounded),
+                    iconSize: DearIconSizes.medium,
                     color: DearColors.coralText,
+                    style: IconButton.styleFrom(
+                      backgroundColor: DearColors.coralSoft,
+                      disabledBackgroundColor: DearColors.blush,
+                      shape: const CircleBorder(),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1412,7 +1469,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                           ),
                       decoration: const InputDecoration(
                         hintText: '메시지 입력...',
-                        hintStyle: TextStyle(color: DearColors.disabled),
+                        hintStyle: TextStyle(color: DearColors.placeholder),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
@@ -1422,29 +1479,43 @@ class _ChatPageState extends ConsumerState<ChatPage>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    width: 54,
-                    height: 54,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: DearColors.coralText,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: const Color(0xFFF3E7EC),
-                        disabledForegroundColor: DearColors.disabled,
-                        shape: const CircleBorder(),
-                        padding: EdgeInsets.zero,
+                  Semantics(
+                    key: const Key('chat-send-button-semantics'),
+                    container: true,
+                    button: true,
+                    enabled: canSendText,
+                    liveRegion: _sending,
+                    label: _sending
+                        ? (_sendingImage ? '사진 전송 중' : '메시지 전송 중')
+                        : canSendText
+                            ? '메시지 전송 가능'
+                            : '메시지를 입력하면 전송할 수 있어요',
+                    onTap: canSendText ? _sendText : null,
+                    excludeSemantics: true,
+                    child: SizedBox(
+                      width: 54,
+                      height: 54,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: DearColors.coralText,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFFF3E7EC),
+                          disabledForegroundColor: DearColors.disabled,
+                          shape: const CircleBorder(),
+                          padding: EdgeInsets.zero,
+                        ),
+                        onPressed: canSendText ? _sendText : null,
+                        child: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.send_rounded),
                       ),
-                      onPressed: canSendText ? _sendText : null,
-                      child: _sending
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.send_rounded),
                     ),
                   ),
                 ],
@@ -1456,6 +1527,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 }
+
+enum _PhotoAttachmentChoice { single, multiple }
 
 enum _PendingImageStatus { queued, uploading, cancelling, failed }
 
@@ -1817,6 +1890,7 @@ class _ChatBubbleContent extends StatelessWidget {
             ),
           const SizedBox(height: 4),
           _MessageMetaRow(
+            messageId: imageMessages.last.id,
             isMine: isMine,
             deliveryLabel: isMine ? (isReadByPartner ? '읽음' : '전송됨') : null,
             showTimeLabel: !message.hasImage && showMessageTime,
@@ -1824,6 +1898,7 @@ class _ChatBubbleContent extends StatelessWidget {
             heartCount: imageMessages.last.heartCount,
             isHeartedByMe: imageMessages.last.isHeartedByMe,
             onToggleHeart: onToggleHeart,
+            onShowActions: onLongPress,
           ),
         ],
       ),
@@ -1962,6 +2037,7 @@ class _SenderAvatar extends StatelessWidget {
 
 class _MessageMetaRow extends StatelessWidget {
   const _MessageMetaRow({
+    required this.messageId,
     required this.isMine,
     required this.deliveryLabel,
     required this.showTimeLabel,
@@ -1969,8 +2045,10 @@ class _MessageMetaRow extends StatelessWidget {
     required this.heartCount,
     required this.isHeartedByMe,
     required this.onToggleHeart,
+    required this.onShowActions,
   });
 
+  final int messageId;
   final bool isMine;
   final String? deliveryLabel;
   final bool showTimeLabel;
@@ -1978,6 +2056,7 @@ class _MessageMetaRow extends StatelessWidget {
   final int heartCount;
   final bool isHeartedByMe;
   final VoidCallback onToggleHeart;
+  final VoidCallback onShowActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1989,11 +2068,13 @@ class _MessageMetaRow extends StatelessWidget {
           ),
     );
 
-    final heart = _HeartReactionButton(
-      count: heartCount,
-      isActive: isHeartedByMe,
-      onTap: onToggleHeart,
-    );
+    final heart = heartCount <= 0
+        ? null
+        : _HeartReactionButton(
+            count: heartCount,
+            isActive: isHeartedByMe,
+            onTap: onToggleHeart,
+          );
     final delivery = deliveryLabel == null
         ? null
         : Text(
@@ -2010,23 +2091,52 @@ class _MessageMetaRow extends StatelessWidget {
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Padding(
         padding: EdgeInsets.only(right: isMine ? 2 : 0, left: isMine ? 0 : 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
+          alignment: isMine ? WrapAlignment.end : WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6,
+          runSpacing: 2,
           children: isMine
               ? [
                   if (delivery != null) delivery,
-                  if (delivery != null) const SizedBox(width: 6),
                   if (showTimeLabel) time,
-                  if (showTimeLabel) const SizedBox(width: 6),
-                  heart,
+                  if (heart != null) heart,
+                  _MessageActionsButton(
+                    messageId: messageId,
+                    onPressed: onShowActions,
+                  ),
                 ]
               : [
-                  heart,
-                  if (showTimeLabel) const SizedBox(width: 6),
+                  if (heart != null) heart,
                   if (showTimeLabel) time,
+                  _MessageActionsButton(
+                    messageId: messageId,
+                    onPressed: onShowActions,
+                  ),
                 ],
         ),
       ),
+    );
+  }
+}
+
+class _MessageActionsButton extends StatelessWidget {
+  const _MessageActionsButton({
+    required this.messageId,
+    required this.onPressed,
+  });
+
+  final int messageId;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return DearIconButton(
+      key: ValueKey<String>('message-actions-$messageId'),
+      tooltip: '메시지 작업 더보기',
+      onPressed: onPressed,
+      icon: const Icon(Icons.more_horiz_rounded),
+      iconSize: DearIconSizes.small,
     );
   }
 }
@@ -2057,12 +2167,16 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
     const horizontalPadding = 7.0;
     const verticalPadding = 3.0;
 
-    final label = widget.isActive ? '하트 취소' : '하트 남기기';
+    final actionLabel = widget.isActive ? '하트 취소' : '하트 남기기';
     return Tooltip(
-      message: label,
+      message: actionLabel,
       child: Semantics(
         button: true,
-        label: label,
+        toggled: widget.isActive,
+        label: '하트 반응 ${widget.count}개',
+        hint: actionLabel,
+        onTap: widget.onTap,
+        excludeSemantics: true,
         child: GestureDetector(
           onTapDown: (_) => setState(() => _pressed = true),
           onTapCancel: () => setState(() => _pressed = false),
@@ -2086,12 +2200,12 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             child: Center(
               child: AnimatedScale(
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeOutBack,
+                duration: DearMotion.duration(context, DearMotion.fast),
+                curve: DearMotion.emphasizedCurve,
                 scale: _longPulse ? 1.2 : (_pressed ? 0.93 : 1),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOutCubic,
+                  duration: DearMotion.duration(context, DearMotion.exit),
+                  curve: DearMotion.enterCurve,
                   padding: const EdgeInsets.symmetric(
                     horizontal: horizontalPadding,
                     vertical: verticalPadding,
@@ -2284,46 +2398,57 @@ class _MessageImageState extends ConsumerState<_MessageImage> {
       builder: (context, snapshot) {
         final imageUrl = snapshot.data;
         final heroTag = 'chat-image-${widget.messageId}';
-
-        return GestureDetector(
-          onTap: imageUrl == null
-              ? null
-              : () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ChatImageViewPage(
-                        imageUrl: imageUrl,
-                        heroTag: heroTag,
-                      ),
+        final VoidCallback? openImage = imageUrl == null
+            ? null
+            : () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChatImageViewPage(
+                      imageUrl: imageUrl,
+                      heroTag: heroTag,
                     ),
-                  );
-                },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Hero(
-                tag: heroTag,
-                child: _StableNetworkImageFrame(
-                  imageUrl: imageUrl,
-                  width: widget.maxWidth,
-                  height: widget.maxWidth * 0.74,
-                  borderRadius: 12,
-                ),
-              ),
-              if (widget.showTimeLabel)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, right: 2),
-                  child: Text(
-                    chatTimeLabel(widget.sentAt),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: DearColors.secondary,
-                          fontWeight:
-                              widget.isMine ? FontWeight.w600 : FontWeight.w500,
-                        ),
+                  ),
+                );
+              };
+
+        return Semantics(
+          key: ValueKey<String>('chat-image-open-${widget.messageId}'),
+          container: true,
+          button: imageUrl != null,
+          enabled: imageUrl != null,
+          label: imageUrl == null ? '사진 불러오는 중' : '사진 크게 보기',
+          onTap: openImage,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: openImage,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Hero(
+                  tag: heroTag,
+                  child: _StableNetworkImageFrame(
+                    imageUrl: imageUrl,
+                    width: widget.maxWidth,
+                    height: widget.maxWidth * 0.74,
+                    borderRadius: 12,
                   ),
                 ),
-            ],
+                if (widget.showTimeLabel)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 2),
+                    child: Text(
+                      chatTimeLabel(widget.sentAt),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: DearColors.secondary,
+                            fontWeight: widget.isMine
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },

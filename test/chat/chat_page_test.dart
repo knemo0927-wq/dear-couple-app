@@ -6,6 +6,7 @@ import 'package:couple_chat_app/src/features/chat/data/chat_repository.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const coupleId = '11111111-1111-4111-8111-111111111111';
@@ -31,6 +32,44 @@ ChatUploadImageAction controlledUpload(ChatSendImageAction action) {
 ChatSendReplyTextAction controlledReplyText(ChatSendTextAction action) {
   return ({required coupleId, required text, replyToMessageId}) =>
       action(coupleId: coupleId, text: text);
+}
+
+Future<void> _pickSinglePhoto(WidgetTester tester) async {
+  final attachmentButton = find.byKey(const Key('chat-attachment-button'));
+  expect(attachmentButton, findsOneWidget);
+  expect(tester.getSize(attachmentButton).width, greaterThanOrEqualTo(44));
+  expect(tester.getSize(attachmentButton).height, greaterThanOrEqualTo(44));
+
+  await tester.tap(attachmentButton);
+  await tester.pumpAndSettle();
+
+  final singleChoice = find.text('사진 한 장 선택');
+  expect(singleChoice, findsOneWidget);
+  expect(find.text('사진 여러 장 선택'), findsOneWidget);
+  expect(
+    find.ancestor(of: singleChoice, matching: find.byType(SafeArea)),
+    findsWidgets,
+  );
+
+  await tester.tap(singleChoice);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pickMultiplePhotos(WidgetTester tester) async {
+  final attachmentButton = find.byKey(const Key('chat-attachment-button'));
+  expect(attachmentButton, findsOneWidget);
+  expect(tester.getSize(attachmentButton).width, greaterThanOrEqualTo(44));
+  expect(tester.getSize(attachmentButton).height, greaterThanOrEqualTo(44));
+
+  await tester.tap(attachmentButton);
+  await tester.pumpAndSettle();
+
+  expect(find.text('사진 한 장 선택'), findsOneWidget);
+  final multipleChoice = find.text('사진 여러 장 선택');
+  expect(multipleChoice, findsOneWidget);
+
+  await tester.tap(multipleChoice);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -100,8 +139,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
 
     expect(find.text('이미지 미리보기 (PNG)'), findsOneWidget);
     expect(find.byKey(const Key('pending-image-thumbnail')), findsOneWidget);
@@ -159,8 +197,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
     expect(find.text('이미지 미리보기 (JPG)'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(TextButton, '다른 이미지'));
@@ -207,8 +244,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
 
     expect(find.text('JPG, PNG, WEBP 형식 이미지만 전송할 수 있어요.'), findsOneWidget);
     expect(find.byKey(const Key('pending-image-thumbnail')), findsNothing);
@@ -238,8 +274,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
 
     expect(find.textContaining('6.0 MB'), findsOneWidget);
     expect(find.text('용량이 커서 전송이 느릴 수 있어요.'), findsOneWidget);
@@ -277,8 +312,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
 
     expect(find.text('8MB 초과 이미지는 전송할 수 없어요.'), findsOneWidget);
 
@@ -324,8 +358,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
     await tester.tap(find.widgetWithText(FilledButton, '이미지 전송'));
     await tester.pumpAndSettle();
 
@@ -366,8 +399,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
 
     expect(sendImageCount, 0);
     expect(find.text('다시 시도'), findsNothing);
@@ -405,8 +437,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
     await tester.tap(find.widgetWithText(FilledButton, '이미지 전송'));
     await tester.pump();
 
@@ -452,8 +483,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.collections_outlined));
-    await tester.pumpAndSettle();
+    await _pickMultiplePhotos(tester);
 
     expect(find.text('선택한 사진 3장'), findsOneWidget);
     expect(find.byKey(const Key('pending-image-thumbnail')), findsOneWidget);
@@ -489,23 +519,57 @@ void main() {
         ),
       ),
     );
+    final semantics = tester.ensureSemantics();
+
+    expect(
+      find.bySemanticsLabel('메시지를 입력하면 전송할 수 있어요'),
+      findsOneWidget,
+    );
+    final disabledSend = tester.getSemantics(
+      find.bySemanticsLabel('메시지를 입력하면 전송할 수 있어요'),
+    );
+    expect(
+      disabledSend.getSemanticsData().hasAction(SemanticsAction.tap),
+      isFalse,
+    );
 
     await tester.enterText(find.byType(TextField), '곧 도착할 메시지');
     await tester.pump();
-    await tester.tap(find.byType(FilledButton));
+    final enabledSend = tester.getSemantics(
+      find.bySemanticsLabel('메시지 전송 가능'),
+    );
+    expect(
+      enabledSend.getSemanticsData().flagsCollection.isEnabled.toBoolOrNull(),
+      isTrue,
+    );
+    expect(
+      enabledSend.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+
+    await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pump();
 
     expect(find.text('곧 도착할 메시지'), findsOneWidget);
     expect(find.textContaining('전송 중'), findsOneWidget);
+    final sending = tester.getSemantics(
+      find.bySemanticsLabel('메시지 전송 중'),
+    );
+    expect(
+      sending.getSemanticsData().flagsCollection.isEnabled.toBoolOrNull(),
+      isFalse,
+    );
+    expect(sending.getSemanticsData().flagsCollection.isLiveRegion, isTrue);
 
     completer.complete();
     await tester.pumpAndSettle();
 
     expect(find.text('곧 도착할 메시지'), findsNothing);
     expect(find.textContaining('전송 중'), findsNothing);
+    semantics.dispose();
   });
 
-  testWidgets('말풍선을 길게 누르면 답장 복사 삭제 메뉴를 제공한다', (tester) async {
+  testWidgets('44pt 더보기와 길게 누르기는 같은 메시지 작업 메뉴를 제공한다', (tester) async {
     final message = ChatMessage(
       id: 42,
       coupleId: '11111111-1111-4111-8111-111111111111',
@@ -532,13 +596,101 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final semantics = tester.ensureSemantics();
+
+    final actionsButton = find.byKey(
+      const ValueKey<String>('message-actions-42'),
+    );
+    expect(actionsButton, findsOneWidget);
+    expect(tester.getSize(actionsButton).width, greaterThanOrEqualTo(44));
+    expect(tester.getSize(actionsButton).height, greaterThanOrEqualTo(44));
+    expect(
+      find.bySemanticsLabel(RegExp(r'^하트 반응')),
+      findsNothing,
+    );
+
+    await tester.tap(actionsButton);
+    await tester.pumpAndSettle();
+    expect(find.text('하트 남기기'), findsOneWidget);
+    expect(find.text('답장'), findsOneWidget);
+    expect(find.text('복사'), findsOneWidget);
+    expect(find.text('삭제'), findsOneWidget);
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
 
     await tester.longPress(find.text('기억해 줘'));
     await tester.pumpAndSettle();
 
+    expect(find.text('하트 남기기'), findsOneWidget);
     expect(find.text('답장'), findsOneWidget);
     expect(find.text('복사'), findsOneWidget);
     expect(find.text('삭제'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('하트 반응은 개수와 선택 상태를 읽고 작업 메뉴에서 취소할 수 있다', (tester) async {
+    int? toggledMessageId;
+    final message = ChatMessage(
+      id: 43,
+      coupleId: coupleId,
+      senderId: 'user-2',
+      body: '좋아해',
+      imagePath: null,
+      createdAt: DateTime(2026, 7, 12, 9),
+      heartCount: 2,
+      isHeartedByMe: true,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatWatchMessagesProvider.overrideWithValue(
+            (_) => Stream<List<ChatMessage>>.value([message]),
+          ),
+          chatCurrentUserIdProvider.overrideWithValue('user-1'),
+          chatToggleReactionProvider.overrideWithValue(({
+            required int messageId,
+          }) async {
+            toggledMessageId = messageId;
+          }),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: ChatPage(coupleId: coupleId)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final semantics = tester.ensureSemantics();
+
+    final heart = find.bySemanticsLabel(RegExp(r'하트 반응 2개'));
+    expect(heart, findsOneWidget);
+    expect(
+      tester
+          .getSemantics(heart)
+          .getSemanticsData()
+          .flagsCollection
+          .isToggled
+          .toBoolOrNull(),
+      isTrue,
+    );
+    expect(
+      tester
+          .getSemantics(heart)
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+
+    await tester.tap(find.byTooltip('하트 취소'));
+    await tester.pump();
+    expect(toggledMessageId, 43);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('message-actions-43')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('하트 취소'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('같은 사진을 여러 번 고르면 큐에 한 번만 추가한다', (tester) async {
@@ -568,8 +720,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.collections_outlined));
-    await tester.pumpAndSettle();
+    await _pickMultiplePhotos(tester);
 
     expect(find.text('이미지 미리보기 (JPG)'), findsOneWidget);
     expect(find.byKey(const Key('pending-image-thumbnail-1')), findsNothing);
@@ -617,8 +768,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.collections_outlined));
-    await tester.pumpAndSettle();
+    await _pickMultiplePhotos(tester);
     await tester.tap(find.widgetWithText(FilledButton, '2장 전송'));
     await tester.pumpAndSettle();
 
@@ -669,8 +819,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
-    await tester.pumpAndSettle();
+    await _pickSinglePhoto(tester);
     await tester.tap(find.widgetWithText(FilledButton, '이미지 전송'));
     await tester.pump();
     expect(find.text('이미지 업로드 중...'), findsOneWidget);
@@ -824,15 +973,27 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
+    final semantics = tester.ensureSemantics();
 
     expect(
       find.byKey(const ValueKey<String>('chat-image-mosaic-1')),
       findsOneWidget,
     );
     expect(find.byType(Image), findsNWidgets(3));
+    expect(find.bySemanticsLabel('사진 크게 보기'), findsNWidgets(3));
+    for (final messageId in const [1, 2, 3]) {
+      final node = tester.getSemantics(
+        find.byKey(ValueKey<String>('chat-image-open-$messageId')),
+      );
+      expect(
+        node.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+    }
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 80));
     }
+    semantics.dispose();
   });
 
   testWidgets('채팅 최초 로딩은 스켈레톤, 스트림 오류는 재시도 버튼을 표시한다', (tester) async {
