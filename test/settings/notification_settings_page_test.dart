@@ -4,6 +4,8 @@ import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/notifications/data/notification_preferences.dart';
+import 'package:couple_chat_app/src/features/notifications/data/push_registration_providers.dart';
+import 'package:couple_chat_app/src/features/notifications/data/push_registration_service.dart';
 import 'package:couple_chat_app/src/features/settings/presentation/notification_settings_page.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -320,6 +322,79 @@ void main() {
         greaterThan(tester.getTopLeft(quietStart).dx));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('권한 사전 설명 뒤 사용자 탭에서만 시스템 권한과 토큰 등록을 실행한다', (tester) async {
+    var permissionRequests = 0;
+    var systemStatus = const NotificationSystemStatus(
+      authorizationStatus: AuthorizationStatus.notDetermined,
+      hasFcmToken: false,
+      hasApnsToken: false,
+    );
+    final repository = _FakePushTokenRepository();
+
+    await _pumpPage(
+      tester,
+      authStream: Stream.value(_session('user-1')),
+      preferencesFor: (userId) => Stream.value(_preferences(userId)),
+      fetchSystemStatus: () async => systemStatus,
+      requestPermission: () async {
+        permissionRequests += 1;
+        systemStatus = const NotificationSystemStatus(
+          authorizationStatus: AuthorizationStatus.authorized,
+          hasFcmToken: true,
+          hasApnsToken: true,
+        );
+        return AuthorizationStatus.authorized;
+      },
+      pushRepository: repository,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('둘만의 메시지와 기념일을 놓치지 않도록 알림을 켤까요?'),
+      findsOneWidget,
+    );
+    expect(find.text('FCM'), findsNothing);
+    expect(find.text('APNs'), findsNothing);
+    expect(permissionRequests, 0);
+    expect(repository.upserts, isEmpty);
+
+    await tester.tap(find.text('알림 켜기'));
+    await tester.pumpAndSettle();
+
+    expect(permissionRequests, 1);
+    expect(repository.upserts, hasLength(1));
+    expect(repository.upserts.single.userId, 'user-1');
+    expect(find.text('이 기기 알림이 연결됐어요'), findsOneWidget);
+  });
+
+  testWidgets('거절된 권한은 재요청하지 않고 설정 열기로 복구한다', (tester) async {
+    var permissionRequests = 0;
+    var settingsOpenCount = 0;
+
+    await _pumpPage(
+      tester,
+      authStream: Stream.value(_session('user-1')),
+      preferencesFor: (userId) => Stream.value(_preferences(userId)),
+      requestPermission: () async {
+        permissionRequests += 1;
+        return AuthorizationStatus.denied;
+      },
+      openSettings: () async {
+        settingsOpenCount += 1;
+        return true;
+      },
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('기기 설정에서 알림을 허용해 주세요'), findsOneWidget);
+    await tester.tap(find.text('설정 열기'));
+    await tester.pumpAndSettle();
+
+    expect(settingsOpenCount, 1);
+    expect(permissionRequests, 0);
+    expect(find.textContaining('기기 설정에서 Dear 알림을 허용'), findsOneWidget);
+  });
 }
 
 Session _session(String userId) {
@@ -355,6 +430,10 @@ Future<void> _pumpPage(
   required Stream<NotificationPreferences> Function(String userId)
       preferencesFor,
   Future<void> Function(NotificationPreferences preferences)? save,
+  Future<NotificationSystemStatus> Function()? fetchSystemStatus,
+  Future<AuthorizationStatus> Function()? requestPermission,
+  Future<bool> Function()? openSettings,
+  PushTokenRepository? pushRepository,
   Size size = const Size(390, 844),
   double textScale = 1,
 }) async {
@@ -374,10 +453,28 @@ Future<void> _pumpPage(
           save ?? (_) async {},
         ),
         notificationSystemStatusProvider.overrideWith(
-          (ref) async => const NotificationSystemStatus(
-            authorizationStatus: AuthorizationStatus.denied,
-            hasFcmToken: false,
-            hasApnsToken: false,
+          (ref) =>
+              fetchSystemStatus?.call() ??
+              Future.value(
+                const NotificationSystemStatus(
+                  authorizationStatus: AuthorizationStatus.denied,
+                  hasFcmToken: false,
+                  hasApnsToken: false,
+                ),
+              ),
+        ),
+        requestNotificationPermissionProvider.overrideWithValue(
+          requestPermission ?? (() async => AuthorizationStatus.denied),
+        ),
+        openNotificationSettingsProvider.overrideWithValue(
+          openSettings ?? (() async => true),
+        ),
+        pushRegistrationServiceProvider.overrideWithValue(
+          PushRegistrationService(
+            repository: pushRepository ?? _FakePushTokenRepository(),
+            fetchPushToken: () async => 'test-push-token',
+            fetchDeviceId: () async => 'test-device',
+            fetchPlatform: () async => 'ios',
           ),
         ),
       ],
@@ -409,4 +506,16 @@ Future<void> _scrollIntoView(WidgetTester tester, Finder finder) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
+}
+
+class _FakePushTokenRepository implements PushTokenRepository {
+  final List<PushRegistrationRequest> upserts = [];
+
+  @override
+  Future<void> clearByUserAndDevice(String userId, String deviceId) async {}
+
+  @override
+  Future<void> upsert(PushRegistrationRequest request) async {
+    upserts.add(request);
+  }
 }

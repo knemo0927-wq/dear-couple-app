@@ -1,8 +1,10 @@
 import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/common/error_mapper.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
+import 'package:couple_chat_app/src/features/notifications/data/notification_permission_service.dart';
 import 'package:couple_chat_app/src/features/notifications/data/notification_preferences.dart';
 import 'package:couple_chat_app/src/features/notifications/data/push_registration_providers.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,7 +17,8 @@ class NotificationSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _NotificationSettingsPageState
-    extends ConsumerState<NotificationSettingsPage> {
+    extends ConsumerState<NotificationSettingsPage>
+    with WidgetsBindingObserver {
   String? _activeUserId;
   int _userGeneration = 0;
   NotificationPreferences? _baseline;
@@ -26,6 +29,25 @@ class _NotificationSettingsPageState
   bool _preferencesRetrying = false;
   bool _saving = false;
   bool _registering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _activeUserId != null) {
+      ref.invalidate(notificationSystemStatusProvider);
+    }
+  }
 
   Future<void> _save() async {
     final draft = _draft;
@@ -85,6 +107,56 @@ class _NotificationSettingsPageState
     final generation = _userGeneration;
     setState(() => _registering = true);
     try {
+      final cachedStatus =
+          ref.read(notificationSystemStatusProvider).valueOrNull;
+      final NotificationSystemStatus systemStatus;
+      if (cachedStatus != null) {
+        systemStatus = cachedStatus;
+      } else {
+        systemStatus = await ref.read(notificationSystemStatusProvider.future);
+      }
+      if (!mounted ||
+          generation != _userGeneration ||
+          userId != _activeUserId) {
+        return;
+      }
+
+      if (systemStatus.authorizationStatus == AuthorizationStatus.denied) {
+        final opened = await ref.read(openNotificationSettingsProvider)();
+        if (!mounted ||
+            generation != _userGeneration ||
+            userId != _activeUserId) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              opened
+                  ? '기기 설정에서 Dear 알림을 허용한 뒤 돌아와 주세요.'
+                  : '기기 설정을 열지 못했어요. 설정 앱에서 Dear 알림을 허용해 주세요.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final authorization =
+          await ref.read(requestNotificationPermissionProvider)();
+      ref.invalidate(notificationSystemStatusProvider);
+      if (!mounted ||
+          generation != _userGeneration ||
+          userId != _activeUserId) {
+        return;
+      }
+      if (!isNotificationAuthorizationGranted(authorization)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('알림을 켜지 않았어요. 필요할 때 기기 설정에서 변경할 수 있어요.'),
+          ),
+        );
+        return;
+      }
+
       await ref
           .read(pushRegistrationServiceProvider)
           .syncForSession(userId: userId);
@@ -384,21 +456,38 @@ class _SystemStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final authorized = status?.isAuthorized == true;
     final provisional = status?.isProvisional == true;
     final connected = authorized && status?.hasFcmToken == true;
-    final title = provisional
-        ? '알림이 임시 허용됐어요'
-        : connected
-            ? '이 기기 알림이 연결됐어요'
+    final denied = status?.authorizationStatus == AuthorizationStatus.denied;
+    final title = connected
+        ? provisional
+            ? '알림이 조용히 연결됐어요'
+            : '이 기기 알림이 연결됐어요'
+        : denied
+            ? '기기 설정에서 알림을 허용해 주세요'
             : authorized
-                ? '알림 토큰을 연결해 주세요'
-                : '시스템 알림을 허용해 주세요';
-    final subtitle = provisional
-        ? '조용히 전달될 수 있어요. 시스템 설정에서 전체 허용으로 바꿀 수 있어요.'
-        : connected
-            ? '설정한 메시지와 기념일 알림을 받을 수 있어요.'
-            : '한 번만 연결하면 이후에는 자동으로 유지돼요.';
+                ? '알림 연결을 마무리해 주세요'
+                : '둘만의 메시지와 기념일을 놓치지 않도록 알림을 켤까요?';
+    final subtitle = connected
+        ? provisional
+            ? '현재는 조용히 전달될 수 있어요. 기기 설정에서 전체 허용으로 바꿀 수 있어요.'
+            : '설정한 메시지와 기념일 알림을 받을 수 있어요.'
+        : denied
+            ? 'Dear가 알림을 보낼 수 있도록 기기 설정에서 권한을 변경해 주세요.'
+            : authorized
+                ? '권한은 허용됐어요. 이 기기에 알림 토큰만 안전하게 연결할게요.'
+                : '알림을 켜면 메시지, 기념일, 오목 초대를 놓치지 않고 받을 수 있어요.';
+    final actionLabel = denied
+        ? '설정 열기'
+        : authorized
+            ? '다시 연결'
+            : '알림 켜기';
+    final containerColor =
+        connected ? scheme.tertiaryContainer : scheme.primaryContainer;
+    final foreground =
+        connected ? scheme.onTertiaryContainer : scheme.onPrimaryContainer;
     final details = Column(
       key: const Key('notification-system-details'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,14 +496,14 @@ class _SystemStatusCard extends StatelessWidget {
           title,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: DearColors.ink,
+                color: foreground,
               ),
         ),
         const SizedBox(height: 3),
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: DearColors.secondary,
+                color: foreground.withValues(alpha: 0.86),
                 height: 1.35,
               ),
         ),
@@ -428,15 +517,7 @@ class _SystemStatusCard extends StatelessWidget {
               connected: authorized,
             ),
             _ConnectionStatusChip(
-              label: 'FCM',
-              connected: status?.hasFcmToken == true,
-            ),
-            _ConnectionStatusChip(
-              label: 'APNs',
-              connected: status?.hasApnsToken == true,
-            ),
-            _ConnectionStatusChip(
-              label: '서버 설정',
+              label: 'Dear 설정 저장',
               connected: serverSynced,
             ),
           ],
@@ -450,8 +531,8 @@ class _SystemStatusCard extends StatelessWidget {
               : Icons.notifications_none_rounded,
           size: 48,
           iconSize: 24,
-          background: Colors.white,
-          color: connected ? const Color(0xFF3A8D70) : DearColors.coral,
+          background: scheme.surface,
+          color: connected ? scheme.tertiary : scheme.primary,
         );
 
     Widget connectButton({required bool expanded}) => SizedBox(
@@ -460,7 +541,7 @@ class _SystemStatusCard extends StatelessWidget {
           child: TextButton(
             key: const Key('notification-connect-button'),
             onPressed: loading ? null : onConnect,
-            child: Text(loading ? '연결 중' : '연결'),
+            child: Text(loading ? '연결 중...' : actionLabel),
           ),
         );
 
@@ -472,11 +553,9 @@ class _SystemStatusCard extends StatelessWidget {
           key: const Key('notification-system-status-card'),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: connected ? const Color(0xFFF2FAF6) : DearColors.coralSoft,
+            color: containerColor,
             borderRadius: BorderRadius.circular(DearRadii.control),
-            border: Border.all(
-              color: connected ? const Color(0xFFB8E2D2) : DearColors.line,
-            ),
+            border: Border.all(color: scheme.outline),
           ),
           child: reflow
               ? Column(
@@ -524,25 +603,24 @@ class _ConnectionStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = connected ? const Color(0xFF2F725C) : DearColors.secondary;
+    final scheme = Theme.of(context).colorScheme;
+    final color = connected ? scheme.primary : scheme.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: connected ? const Color(0xFFE8F5EF) : DearColors.blush,
+        color: scheme.surface.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: connected ? const Color(0xFFB8E2D2) : DearColors.line,
-        ),
+        border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: DearSpacing.space4,
         children: [
           Icon(
             connected ? Icons.check_circle_rounded : Icons.info_outline_rounded,
             size: 13,
             color: color,
           ),
-          const SizedBox(width: 4),
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -563,10 +641,11 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Text(
       label,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: DearColors.ink,
+            color: scheme.onSurface,
             fontWeight: FontWeight.w900,
           ),
     );
@@ -580,12 +659,13 @@ class _SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
+        color: scheme.surface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(children: children),
     );
@@ -611,18 +691,19 @@ class _PreferenceSwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         SwitchListTile(
           contentPadding: const EdgeInsets.fromLTRB(14, 5, 10, 5),
-          secondary: Icon(icon, color: DearColors.coral),
+          secondary: Icon(icon, color: scheme.primary),
           title: Text(title),
           subtitle: Text(subtitle),
           value: value,
           onChanged: onChanged,
         ),
         if (showDivider)
-          const Divider(height: 1, indent: 54, color: DearColors.line),
+          Divider(height: 1, indent: 54, color: scheme.outlineVariant),
       ],
     );
   }
@@ -647,6 +728,8 @@ class _TimeSelectorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final selectorEnabled = enabled && onChanged != null;
     return Column(
       children: [
@@ -662,7 +745,7 @@ class _TimeSelectorRow extends StatelessWidget {
                 children: [
                   Icon(
                     icon,
-                    color: enabled ? DearColors.coral : DearColors.disabled,
+                    color: enabled ? scheme.primary : theme.disabledColor,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -675,7 +758,7 @@ class _TimeSelectorRow extends StatelessWidget {
                           subtitle,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: DearColors.secondary,
+                                    color: scheme.onSurfaceVariant,
                                   ),
                         ),
                       ],
@@ -725,7 +808,7 @@ class _TimeSelectorRow extends StatelessWidget {
             },
           ),
         ),
-        const Divider(height: 1, indent: 54, color: DearColors.line),
+        Divider(height: 1, indent: 54, color: scheme.outlineVariant),
       ],
     );
   }
@@ -818,6 +901,7 @@ class _NotificationSettingsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ListView.separated(
       padding: const EdgeInsets.all(20),
       itemCount: 6,
@@ -825,9 +909,9 @@ class _NotificationSettingsSkeleton extends StatelessWidget {
       itemBuilder: (_, index) => Container(
         height: index == 0 ? 92 : 68,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.72),
+          color: scheme.surface.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: DearColors.line),
+          border: Border.all(color: scheme.outlineVariant),
         ),
       ),
     );

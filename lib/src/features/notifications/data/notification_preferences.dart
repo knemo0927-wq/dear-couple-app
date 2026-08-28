@@ -183,6 +183,16 @@ final notificationSystemStatusProvider =
   try {
     final messaging = FirebaseMessaging.instance;
     final settings = await messaging.getNotificationSettings();
+    final authorized =
+        settings.authorizationStatus == AuthorizationStatus.authorized ||
+            settings.authorizationStatus == AuthorizationStatus.provisional;
+    if (!authorized) {
+      return NotificationSystemStatus(
+        authorizationStatus: settings.authorizationStatus,
+        hasFcmToken: false,
+        hasApnsToken: false,
+      );
+    }
     final fcmToken = await messaging.getToken();
     String? apnsToken;
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
