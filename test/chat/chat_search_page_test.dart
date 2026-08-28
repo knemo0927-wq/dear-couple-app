@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_providers.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_repository.dart';
@@ -25,6 +26,8 @@ Widget appWithSearch(
   ChatSearchMessages search, {
   double textScale = 1,
   Key? pageKey,
+  ThemeData? theme,
+  bool disableAnimations = false,
 }) {
   return ProviderScope(
     overrides: [
@@ -32,8 +35,12 @@ Widget appWithSearch(
       chatSearchMessagesProvider.overrideWithValue(search),
     ],
     child: MaterialApp(
+      theme: theme,
       home: MediaQuery(
-        data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+        data: MediaQueryData(
+          textScaler: TextScaler.linear(textScale),
+          disableAnimations: disableAnimations,
+        ),
         child: ChatSearchPage(key: pageKey, coupleId: coupleId),
       ),
     ),
@@ -238,6 +245,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('chat-search-result-1')), findsOneWidget);
+  });
+
+  testWidgets('다크 검색 결과는 semantic 색을 쓰고 Reduce Motion에서 결과 이동이 즉시 완료된다',
+      (tester) async {
+    final theme = AppTheme.dark();
+    await tester.pumpWidget(
+      appWithSearch(
+        ({
+          required String coupleId,
+          required String query,
+          int limit = 100,
+        }) async =>
+            [
+          message(3, '여름 여행을 기억해'),
+          message(2, '다음 여행 계획'),
+        ],
+        theme: theme,
+        disableAnimations: true,
+      ),
+    );
+
+    await tester.enterText(find.byType(SearchBar), '여행');
+    await tester.pump(const Duration(milliseconds: 310));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(find.text('상대')).style?.color,
+      theme.colorScheme.primary,
+    );
+    final resultText = tester.widget<RichText>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('chat-search-result-3')),
+            matching: find.byType(RichText),
+          )
+          .last,
+    );
+    expect(resultText.text.style?.color, theme.colorScheme.onSurface);
+
+    await tester.tap(find.byTooltip('다음 검색 결과'));
+    await tester.pump();
+    expect(find.text('2개의 결과 · 2번째'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 

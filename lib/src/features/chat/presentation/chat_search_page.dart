@@ -113,9 +113,13 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
         0.0,
         _scrollController.position.maxScrollExtent,
       );
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _scrollController.jumpTo(target);
+        return;
+      }
       _scrollController.animateTo(
         target,
-        duration: const Duration(milliseconds: 220),
+        duration: DearMotion.standard,
         curve: Curves.easeOut,
       );
     });
@@ -177,7 +181,9 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
                                 : '“$snapshotQuery” 결과 ${_results.length}개 · ${_selectedIndex + 1}번째',
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: DearColors.secondary,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                       fontWeight: FontWeight.w700,
                                     ),
                           ),
@@ -308,12 +314,12 @@ class _SearchBody extends StatelessWidget {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: selected
-                            ? DearColors.coralSoft
+                            ? Theme.of(context).colorScheme.primaryContainer
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(DearRadii.large),
                         border: selected
                             ? Border.all(
-                                color: DearColors.coral.withValues(alpha: .5),
+                                color: Theme.of(context).colorScheme.outline,
                               )
                             : null,
                       ),
@@ -328,7 +334,8 @@ class _SearchBody extends StatelessWidget {
                                     .textTheme
                                     .labelMedium
                                     ?.copyWith(
-                                      color: DearColors.coralText,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
                                       fontWeight: FontWeight.w800,
                                     ),
                               ),
@@ -339,7 +346,9 @@ class _SearchBody extends StatelessWidget {
                                     .textTheme
                                     .labelSmall
                                     ?.copyWith(
-                                      color: DearColors.secondary,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                     ),
                               ),
                             ],
@@ -389,7 +398,7 @@ class _SearchBody extends StatelessWidget {
                 child: Text(
                   '현재 “$currentInput” 검색 중 · “$query” 이전 결과 표시',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DearColors.secondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -459,10 +468,10 @@ class _HighlightedText extends StatelessWidget {
       spans.add(
         TextSpan(
           text: text.substring(index, index + target.length),
-          style: const TextStyle(
-            color: DearColors.coralText,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w900,
-            backgroundColor: DearColors.blushDeep,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
           ),
         ),
       );
@@ -472,7 +481,7 @@ class _HighlightedText extends StatelessWidget {
     return Text.rich(
       TextSpan(
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: DearColors.ink,
+              color: Theme.of(context).colorScheme.onSurface,
               height: 1.4,
             ),
         children: spans,
@@ -513,7 +522,7 @@ class _SearchEmptyState extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: DearColors.ink,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -522,7 +531,7 @@ class _SearchEmptyState extends StatelessWidget {
               description,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: DearColors.secondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],

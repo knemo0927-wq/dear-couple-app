@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_providers.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_repository.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_media_page.dart';
@@ -24,6 +25,7 @@ ChatMessage photoMessage(int id) => ChatMessage(
 Widget mediaApp(
   ChatFetchMediaPage fetch, {
   ChatResolveImageUrl? resolveUrl,
+  ThemeData? theme,
 }) {
   return ProviderScope(
     overrides: [
@@ -33,6 +35,7 @@ Widget mediaApp(
       ),
     ],
     child: MaterialApp(
+      theme: theme,
       home: ChatMediaPage(key: UniqueKey(), coupleId: coupleId),
     ),
   );
@@ -333,5 +336,36 @@ void main() {
     );
 
     semantics.dispose();
+  });
+
+  testWidgets('다크 미디어 로딩과 타일 placeholder는 semantic surface를 사용한다',
+      (tester) async {
+    final theme = AppTheme.dark();
+    final pending = Completer<ChatMessagePage>();
+    await tester.pumpWidget(
+      mediaApp(
+        ({
+          required String coupleId,
+          int? beforeMessageId,
+          int limit = 30,
+        }) =>
+            pending.future,
+        theme: theme,
+      ),
+    );
+    await tester.pump();
+
+    final skeleton = tester.widget<DecoratedBox>(
+      find
+          .descendant(
+            of: find.byKey(const Key('chat-media-loading')),
+            matching: find.byType(DecoratedBox),
+          )
+          .first,
+    );
+    expect(
+      (skeleton.decoration as BoxDecoration).color,
+      theme.colorScheme.surfaceContainer,
+    );
   });
 }

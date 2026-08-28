@@ -191,7 +191,7 @@ class _ChatMediaPageState extends ConsumerState<ChatMediaPage> {
         itemCount: 12,
         itemBuilder: (_, __) => DecoratedBox(
           decoration: BoxDecoration(
-            color: DearColors.blush,
+            color: Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(DearRadii.small),
           ),
         ),
@@ -450,7 +450,7 @@ class _MediaTileState extends State<_MediaTile> {
 
         return Material(
           key: ValueKey<String>('chat-media-${widget.message.id}'),
-          color: DearColors.blush,
+          color: Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(DearRadii.small),
           clipBehavior: Clip.antiAlias,
           child: child,
