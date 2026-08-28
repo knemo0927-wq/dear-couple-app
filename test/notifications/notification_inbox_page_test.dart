@@ -1,3 +1,5 @@
+import 'package:couple_chat_app/src/common/app_theme.dart';
+import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/notifications/data/notification_inbox.dart';
 import 'package:couple_chat_app/src/features/notifications/presentation/notification_inbox_page.dart';
@@ -69,6 +71,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('chat-detail'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 모드의 읽음·안 읽음 카드와 텍스트가 semantic 색을 사용한다', (tester) async {
+    final theme = AppTheme.dark();
+    final session = Session(
+      accessToken: 'test-token',
+      tokenType: 'bearer',
+      user: const User(
+        id: 'user-1',
+        appMetadata: <String, dynamic>{},
+        userMetadata: <String, dynamic>{},
+        aud: 'authenticated',
+        createdAt: '2026-07-12T00:00:00Z',
+      ),
+    );
+    final createdAt = DateTime.now().subtract(const Duration(minutes: 5));
+    final items = [
+      NotificationInboxItem(
+        id: 'unread',
+        category: 'message',
+        route: '/notifications',
+        payload: const <String, dynamic>{
+          'title': '안 읽은 알림',
+          'body': '확인할 소식이 있어요.',
+        },
+        status: 'sent',
+        createdAt: createdAt,
+        readAt: null,
+      ),
+      NotificationInboxItem(
+        id: 'read',
+        category: 'message',
+        route: '/notifications',
+        payload: const <String, dynamic>{
+          'title': '읽은 알림',
+          'body': '이미 확인한 소식이에요.',
+        },
+        status: 'sent',
+        createdAt: createdAt,
+        readAt: createdAt,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionProvider.overrideWith((ref) => Stream.value(session)),
+          notificationInboxProvider.overrideWith(
+            (ref, userId) => Stream.value(items),
+          ),
+          markNotificationReadProvider.overrideWithValue((ids) async {}),
+        ],
+        child: MaterialApp(
+          theme: theme,
+          home: const NotificationInboxPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final unreadCard = tester.widget<DearCard>(
+      find.byKey(const ValueKey('notification-inbox-unread')),
+    );
+    final readCard = tester.widget<DearCard>(
+      find.byKey(const ValueKey('notification-inbox-read')),
+    );
+    expect(unreadCard.color, theme.colorScheme.primaryContainer);
+    expect(readCard.color, theme.colorScheme.surface);
+    expect(
+      tester.widget<Text>(find.text('안 읽은 알림')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    expect(
+      tester.widget<Text>(find.text('확인할 소식이 있어요.')).style?.color,
+      theme.colorScheme.onSurfaceVariant,
+    );
     expect(tester.takeException(), isNull);
   });
 }

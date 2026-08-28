@@ -79,6 +79,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final profileAsync = ref.watch(myProfileProvider);
     final profile = profileAsync.valueOrNull;
     final canOpenHistory =
@@ -253,10 +254,10 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                     children: [
                       Row(
                         children: [
-                          const DearIconBubble(
+                          DearIconBubble(
                             icon: Icons.sports_esports_rounded,
                             size: 56,
-                            background: Colors.white,
+                            background: scheme.surface,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -269,7 +270,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                                       .textTheme
                                       .titleLarge
                                       ?.copyWith(
-                                        color: DearColors.ink,
+                                        color: scheme.onSurface,
                                         fontWeight: FontWeight.w900,
                                       ),
                                 ),
@@ -280,7 +281,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                                       .textTheme
                                       .bodySmall
                                       ?.copyWith(
-                                        color: DearColors.muted,
+                                        color: scheme.onSurfaceVariant,
                                       ),
                                 ),
                               ],
@@ -369,7 +370,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                                             .textTheme
                                             .titleMedium
                                             ?.copyWith(
-                                              color: DearColors.ink,
+                                              color: scheme.onSurface,
                                               fontWeight: FontWeight.w900,
                                             ),
                                       ),
@@ -392,7 +393,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                                   size: 20,
                                 ),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: DearColors.secondary,
+                                  foregroundColor: scheme.onSurfaceVariant,
                                   textStyle: const TextStyle(
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -404,11 +405,22 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                           Row(
                             children: [
                               Expanded(
-                                  child: _recordTile('승리', '${record.wins}')),
-                              Expanded(
-                                  child: _recordTile('패배', '${record.losses}')),
+                                child: _recordTile(
+                                  context,
+                                  '승리',
+                                  '${record.wins}',
+                                ),
+                              ),
                               Expanded(
                                 child: _recordTile(
+                                  context,
+                                  '패배',
+                                  '${record.losses}',
+                                ),
+                              ),
+                              Expanded(
+                                child: _recordTile(
+                                  context,
                                   '승률',
                                   '${winRate.toStringAsFixed(0)}%',
                                   highlight: true,
@@ -438,7 +450,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                                   .textTheme
                                   .titleMedium
                                   ?.copyWith(
-                                    color: DearColors.ink,
+                                    color: scheme.onSurface,
                                     fontWeight: FontWeight.w900,
                                   ),
                             ),
@@ -458,7 +470,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                               size: 20,
                             ),
                             style: TextButton.styleFrom(
-                              foregroundColor: DearColors.secondary,
+                              foregroundColor: scheme.onSurfaceVariant,
                               textStyle: const TextStyle(
                                 fontWeight: FontWeight.w700,
                               ),
@@ -501,7 +513,13 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
     );
   }
 
-  Widget _recordTile(String label, String value, {bool highlight = false}) {
+  Widget _recordTile(
+    BuildContext context,
+    String label,
+    String value, {
+    bool highlight = false,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         Text(
@@ -509,15 +527,15 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
           style: TextStyle(
             fontSize: 30,
             fontWeight: FontWeight.w900,
-            color: highlight ? DearColors.coralText : DearColors.ink,
+            color: highlight ? scheme.primary : scheme.onSurface,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            color: DearColors.secondary,
+            color: scheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -539,6 +557,7 @@ class _LatestInviteStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final expired = invite.isExpired;
     final accepted = invite.isUsed;
     final rejected = invite.isRejected;
@@ -546,24 +565,24 @@ class _LatestInviteStatus extends StatelessWidget {
         ? (
             Icons.check_circle_rounded,
             '상대가 초대를 수락했어요.',
-            const Color(0xFF28613E),
+            scheme.onTertiaryContainer,
           )
         : rejected
             ? (
                 Icons.person_off_rounded,
                 '상대가 이번 초대를 거절했어요.',
-                DearColors.secondary,
+                scheme.onSurfaceVariant,
               )
             : expired
                 ? (
                     Icons.timer_off_rounded,
                     '초대가 만료됐어요. 다시 보내 주세요.',
-                    DearColors.error,
+                    scheme.error,
                   )
                 : (
                     Icons.schedule_rounded,
                     '전송 완료 · 상대 응답 대기 중',
-                    DearColors.coralText,
+                    scheme.primary,
                   );
 
     return Semantics(
@@ -573,9 +592,9 @@ class _LatestInviteStatus extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.78),
+          color: scheme.surface.withValues(alpha: 0.78),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: DearColors.line),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -604,8 +623,8 @@ class _LatestInviteStatus extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${formatOmokDateTime(invite.expiresAt)}까지',
-                        style: const TextStyle(
-                          color: DearColors.secondary,
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant,
                           fontSize: 11,
                         ),
                       ),
@@ -634,6 +653,7 @@ class _MiniSkeletonLines extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       label: '내용을 불러오는 중',
       child: Column(
@@ -644,7 +664,7 @@ class _MiniSkeletonLines extends StatelessWidget {
             child: Container(
               height: 14,
               decoration: BoxDecoration(
-                color: DearColors.blushDeep,
+                color: scheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(99),
               ),
             ),
@@ -663,9 +683,10 @@ class _CompactLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        const Icon(Icons.cloud_off_rounded, color: DearColors.secondary),
+        Icon(Icons.cloud_off_rounded, color: scheme.onSurfaceVariant),
         const SizedBox(width: 10),
         Expanded(child: Text(message)),
         TextButton(onPressed: onRetry, child: const Text('다시 시도')),
@@ -757,6 +778,7 @@ class _OmokInviteWaitPageState extends ConsumerState<OmokInviteWaitPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('오목 대기실')),
       body: StreamBuilder<OmokInviteState?>(
@@ -850,14 +872,14 @@ class _OmokInviteWaitPageState extends ConsumerState<OmokInviteWaitPage> {
                           child: CircularProgressIndicator(strokeWidth: 4),
                         )
                       else
-                        Icon(icon, size: 56, color: DearColors.coralText),
+                        Icon(icon, size: 56, color: scheme.primary),
                       const SizedBox(height: 20),
                       Text(
                         title,
                         textAlign: TextAlign.center,
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: DearColors.ink,
+                                  color: scheme.onSurface,
                                   fontWeight: FontWeight.w900,
                                 ),
                       ),
@@ -873,25 +895,25 @@ class _OmokInviteWaitPageState extends ConsumerState<OmokInviteWaitPage> {
                         Text(
                           '만료까지 $remainingLabel',
                           key: const ValueKey('omok-invite-countdown'),
-                          style: const TextStyle(
-                            color: DearColors.coralText,
+                          style: TextStyle(
+                            color: scheme.primary,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                         const SizedBox(height: 14),
-                        const Row(
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.wifi_rounded,
                               size: 17,
-                              color: DearColors.secondary,
+                              color: scheme.onSurfaceVariant,
                             ),
-                            SizedBox(width: 6),
+                            const SizedBox(width: 6),
                             Text(
                               '실시간으로 상대 응답 확인 중',
                               style: TextStyle(
-                                color: DearColors.secondary,
+                                color: scheme.onSurfaceVariant,
                                 fontSize: 12,
                               ),
                             ),
@@ -1031,6 +1053,7 @@ class _OmokInviteAcceptPageState extends ConsumerState<OmokInviteAcceptPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('오목 초대'),
@@ -1137,7 +1160,7 @@ class _OmokInviteAcceptPageState extends ConsumerState<OmokInviteAcceptPage> {
                           textAlign: TextAlign.center,
                           style:
                               Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    color: DearColors.ink,
+                                    color: scheme.onSurface,
                                     fontWeight: FontWeight.w900,
                                   ),
                         ),
@@ -1145,14 +1168,14 @@ class _OmokInviteAcceptPageState extends ConsumerState<OmokInviteAcceptPage> {
                         Text(
                           description,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: DearColors.secondary),
+                          style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
                         if (_actionError != null) ...[
                           const SizedBox(height: 12),
                           Text(
                             toFriendlyErrorMessage(_actionError!),
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: DearColors.error),
+                            style: TextStyle(color: scheme.error),
                           ),
                         ],
                         const SizedBox(height: 22),

@@ -62,7 +62,7 @@ class OmokHistoryPage extends ConsumerWidget {
                   Text(
                     '대국 히스토리',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: DearColors.ink,
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.w900,
                         ),
                   ),
@@ -71,8 +71,9 @@ class OmokHistoryPage extends ConsumerWidget {
                       ? const SizedBox.shrink()
                       : Text(
                           '총 ${gamesAsync.valueOrNull!.length}판',
-                          style: const TextStyle(
-                            color: DearColors.secondary,
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -110,7 +111,11 @@ class OmokHistoryPage extends ConsumerWidget {
                             ),
                           ),
                           if (index != games.length - 1)
-                            const Divider(height: 1, color: DearColors.line),
+                            Divider(
+                              height: 1,
+                              color:
+                                  Theme.of(context).colorScheme.outlineVariant,
+                            ),
                         ],
                       ],
                     ),
@@ -137,7 +142,7 @@ class OmokHistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final result = omokResultPresentation(game.result);
+    final result = omokResultPresentation(context, game.result);
     final date = formatOmokDateTime(game.finishedAt ?? game.createdAt);
     final reason = omokReasonLabel(game.endReason);
 
@@ -151,6 +156,7 @@ class OmokHistoryTile extends StatelessWidget {
           minVerticalPadding: 10,
           onTap: onTap,
           leading: Container(
+            key: ValueKey('omok-result-${game.sessionId}'),
             width: 42,
             height: 42,
             decoration: BoxDecoration(
@@ -168,9 +174,9 @@ class OmokHistoryTile extends StatelessWidget {
             ),
           ),
           subtitle: Text('$reason · $date'),
-          trailing: const Icon(
+          trailing: Icon(
             Icons.chevron_right_rounded,
-            color: DearColors.secondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       ),
@@ -194,47 +200,51 @@ class OmokResultPresentation {
   final Color border;
 }
 
-OmokResultPresentation omokResultPresentation(String result) {
+OmokResultPresentation omokResultPresentation(
+  BuildContext context,
+  String result,
+) {
+  final scheme = Theme.of(context).colorScheme;
   switch (result) {
     case 'win':
-      return const OmokResultPresentation(
+      return OmokResultPresentation(
         label: '승리',
         icon: Icons.emoji_events_rounded,
-        foreground: Color(0xFF28613E),
-        background: Color(0xFFEAF7EE),
-        border: Color(0xFFB9DDC4),
+        foreground: scheme.onTertiaryContainer,
+        background: scheme.tertiaryContainer,
+        border: scheme.tertiary,
       );
     case 'loss':
-      return const OmokResultPresentation(
+      return OmokResultPresentation(
         label: '패배',
         icon: Icons.close_rounded,
-        foreground: Color(0xFF9F3030),
-        background: Color(0xFFFFEEEE),
-        border: Color(0xFFF0C4C4),
+        foreground: scheme.onErrorContainer,
+        background: scheme.errorContainer,
+        border: scheme.error,
       );
     case 'draw':
-      return const OmokResultPresentation(
+      return OmokResultPresentation(
         label: '무승부',
         icon: Icons.balance_rounded,
-        foreground: Color(0xFF4E5968),
-        background: Color(0xFFF1F3F5),
-        border: Color(0xFFD5DADF),
+        foreground: scheme.onSecondaryContainer,
+        background: scheme.secondaryContainer,
+        border: scheme.outline,
       );
     case 'cancelled':
-      return const OmokResultPresentation(
+      return OmokResultPresentation(
         label: '취소',
         icon: Icons.block_rounded,
-        foreground: DearColors.secondary,
-        background: DearColors.blush,
-        border: DearColors.line,
+        foreground: scheme.onSurfaceVariant,
+        background: scheme.surfaceContainerHigh,
+        border: scheme.outlineVariant,
       );
     default:
       return OmokResultPresentation(
         label: result,
         icon: Icons.info_outline_rounded,
-        foreground: DearColors.secondary,
-        background: DearColors.blush,
-        border: DearColors.line,
+        foreground: scheme.onSurfaceVariant,
+        background: scheme.surfaceContainerHigh,
+        border: scheme.outlineVariant,
       );
   }
 }
@@ -273,14 +283,15 @@ class OmokLoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       label: '내용을 불러오는 중',
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          color: DearColors.card,
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(DearRadii.medium),
-          border: Border.all(color: DearColors.line),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         padding: const EdgeInsets.all(16),
         child: const Column(
@@ -306,12 +317,13 @@ class _SkeletonLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return FractionallySizedBox(
       widthFactor: widthFactor,
       child: Container(
         height: 10,
         decoration: BoxDecoration(
-          color: DearColors.blushDeep,
+          color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(99),
         ),
       ),
@@ -335,7 +347,10 @@ class OmokInlineError extends StatelessWidget {
       shadowOpacity: 0.25,
       child: Column(
         children: [
-          const Icon(Icons.cloud_off_rounded, color: DearColors.secondary),
+          Icon(
+            Icons.cloud_off_rounded,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 8),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 8),
@@ -373,7 +388,7 @@ class _RecordSummary extends StatelessWidget {
               Text(
                 '우리 전적',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: DearColors.ink,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
               ),
@@ -416,12 +431,13 @@ class _Metric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         Text(
           value,
           style: TextStyle(
-            color: highlight ? DearColors.coralText : DearColors.ink,
+            color: highlight ? scheme.primary : scheme.onSurface,
             fontSize: 22,
             fontWeight: FontWeight.w900,
           ),
@@ -431,8 +447,8 @@ class _Metric extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: DearColors.secondary,
+          style: TextStyle(
+            color: scheme.onSurfaceVariant,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -447,18 +463,20 @@ class _EmptyHistory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DearCard(
+    return DearCard(
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 18),
+        padding: const EdgeInsets.symmetric(vertical: 18),
         child: Column(
           children: [
-            Icon(Icons.sports_esports_outlined, size: 34),
-            SizedBox(height: 10),
-            Text('아직 끝난 대국이 없어요.'),
-            SizedBox(height: 4),
+            const Icon(Icons.sports_esports_outlined, size: 34),
+            const SizedBox(height: 10),
+            const Text('아직 끝난 대국이 없어요.'),
+            const SizedBox(height: 4),
             Text(
               '첫 대국을 시작하면 이곳에 기록돼요.',
-              style: TextStyle(color: DearColors.secondary),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),

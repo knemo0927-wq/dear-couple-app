@@ -1,3 +1,4 @@
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/presentation/password_recovery_page.dart';
 import 'package:flutter/material.dart';
@@ -55,5 +56,38 @@ void main() {
     await tester.pump();
 
     expect(submitted, 'Dear2026!');
+  });
+
+  testWidgets('다크 모드의 안내 텍스트와 입력이 semantic 색을 사용한다', (tester) async {
+    final theme = AppTheme.dark();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authPasswordUpdateProvider.overrideWithValue((password) async {}),
+        ],
+        child: MaterialApp(
+          theme: theme,
+          home: const PasswordRecoveryPage(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.widget<Text>(find.text('새 비밀번호를 입력해 주세요')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    expect(
+      tester
+          .widget<Text>(find.text('영문과 숫자를 포함해 8자 이상으로 설정해 주세요.'))
+          .style
+          ?.color,
+      theme.colorScheme.onSurfaceVariant,
+    );
+    expect(
+      theme.inputDecorationTheme.fillColor,
+      theme.colorScheme.surfaceContainer,
+    );
+    expect(tester.takeException(), isNull);
   });
 }

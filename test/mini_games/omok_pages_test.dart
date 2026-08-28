@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:couple_chat_app/src/common/app_theme.dart';
+import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
 import 'package:couple_chat_app/src/features/mini_games/data/omok_providers.dart';
@@ -120,6 +122,7 @@ void main() {
     double textScale = 1,
     double bottomInset = 0,
     bool disableAnimations = false,
+    ThemeData? theme,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -151,6 +154,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
+          theme: theme,
           builder: (context, child) {
             final media = MediaQuery.of(context);
             return MediaQuery(
@@ -294,6 +298,97 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -650));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 모드의 메인·기록·규칙이 semantic 색을 사용한다', (tester) async {
+    configurePhone(tester);
+    final router = dashboardRouter();
+    addTearDown(router.dispose);
+    final theme = AppTheme.dark();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: dashboardOverrides(),
+        child: MaterialApp.router(
+          theme: theme,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<DearIconBubble>(find.byType(DearIconBubble).first)
+          .background,
+      theme.colorScheme.surface,
+    );
+    expect(
+      tester.widget<Text>(find.text('한 판 신청하기')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    expect(
+      tester.widget<Text>(find.text('우리, 지금 한 판 어때요?')).style?.color,
+      theme.colorScheme.onSurfaceVariant,
+    );
+    final dashboardResult = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-result-finished-1')),
+    );
+    final dashboardResultDecoration =
+        dashboardResult.decoration! as BoxDecoration;
+    expect(
+      dashboardResultDecoration.color,
+      theme.colorScheme.tertiaryContainer,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('omok-main-overflow')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('오목 규칙'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(find.text('오목 규칙')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    final ruleBadge = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-rule-number-1')),
+    );
+    expect(
+      (ruleBadge.decoration! as BoxDecoration).color,
+      theme.colorScheme.primaryContainer,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('omok-rule-number-1')),
+              matching: find.text('1'),
+            ),
+          )
+          .style
+          ?.color,
+      theme.colorScheme.onPrimaryContainer,
+    );
+
+    await tester.tap(find.text('확인'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('omok-record-history-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(find.text('대국 히스토리')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    final historyResult = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-result-finished-1')),
+    );
+    final historyDecoration = historyResult.decoration! as BoxDecoration;
+    expect(historyDecoration.color, theme.colorScheme.tertiaryContainer);
+    expect((historyDecoration.border! as Border).top.color,
+        theme.colorScheme.tertiary);
     expect(tester.takeException(), isNull);
   });
 
@@ -665,6 +760,77 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('다크 모드 대국 chrome은 semantic 색을 쓰고 보드·돌 고유색을 보존한다', (tester) async {
+    final theme = AppTheme.dark();
+    final moves = [
+      OmokMove(
+        id: 1,
+        sessionId: 'accessible-game',
+        moveNo: 1,
+        userId: 'user-1',
+        stone: 'black',
+        x: 7,
+        y: 7,
+        createdAt: DateTime.now(),
+      ),
+      OmokMove(
+        id: 2,
+        sessionId: 'accessible-game',
+        moveNo: 2,
+        userId: 'user-2',
+        stone: 'white',
+        x: 4,
+        y: 4,
+        createdAt: DateTime.now(),
+      ),
+    ];
+    await pumpAccessibleGame(
+      tester,
+      theme: theme,
+      sessionStream: Stream.value(gameSession()),
+      movesStream: Stream.value(moves),
+    );
+
+    final banner = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-connection-banner')),
+    );
+    final bannerDecoration = banner.decoration! as BoxDecoration;
+    expect(bannerDecoration.color, theme.colorScheme.tertiaryContainer);
+    expect(
+      (bannerDecoration.border! as Border).top.color,
+      theme.colorScheme.tertiary,
+    );
+    expect(
+      tester.widget<Text>(find.text('내 차례')).style?.color,
+      theme.colorScheme.primary,
+    );
+
+    final board = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-board-surface')),
+    );
+    expect((board.decoration! as BoxDecoration).color, DearColors.board);
+    final blackStone = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-stone-7-7')),
+    );
+    final whiteStone = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-stone-4-4')),
+    );
+    expect((blackStone.decoration! as BoxDecoration).color, Colors.black);
+    expect((whiteStone.decoration! as BoxDecoration).color, Colors.white);
+
+    final marker = tester.widget<Container>(
+      find.byKey(const ValueKey('omok-last-move-marker')),
+    );
+    final markerColor =
+        ((marker.decoration! as BoxDecoration).border! as Border).top.color;
+    expect(markerColor, DearColors.coralText);
+    expect(
+      _contrastRatio(markerColor, DearColors.board),
+      greaterThanOrEqualTo(3),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('대국 종료 후 더보기는 재대결과 규칙을 제공한다', (tester) async {
     configurePhone(tester);
     final session = OmokSessionInfo(
@@ -927,4 +1093,14 @@ void main() {
       isNot(contains('create trigger omok_invites_enqueue_push')),
     );
   });
+}
+
+double _contrastRatio(Color first, Color second) {
+  final firstLuminance = first.computeLuminance();
+  final secondLuminance = second.computeLuminance();
+  final lighter =
+      firstLuminance > secondLuminance ? firstLuminance : secondLuminance;
+  final darker =
+      firstLuminance > secondLuminance ? secondLuminance : firstLuminance;
+  return (lighter + 0.05) / (darker + 0.05);
 }

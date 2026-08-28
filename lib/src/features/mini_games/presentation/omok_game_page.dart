@@ -238,6 +238,7 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final profileAsync = ref.watch(myProfileProvider);
     final sessionAsync = ref.watch(omokSessionProvider(widget.sessionId));
     final movesAsync = ref.watch(omokMovesProvider(widget.sessionId));
@@ -463,7 +464,9 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodyMedium
-                                      ?.copyWith(color: DearColors.secondary),
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
                                 ),
                                 if (session.isPlaying)
                                   Text(
@@ -520,6 +523,9 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                     width: boardWidth,
                                     height: boardWidth,
                                     child: Container(
+                                      key: const ValueKey(
+                                        'omok-board-surface',
+                                      ),
                                       clipBehavior: Clip.antiAlias,
                                       decoration: BoxDecoration(
                                         color: DearColors.board,
@@ -602,6 +608,10 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                                                         .center,
                                                                 children: [
                                                                   Container(
+                                                                    key:
+                                                                        ValueKey(
+                                                                      'omok-stone-$x-$y',
+                                                                    ),
                                                                     width:
                                                                         stoneSize,
                                                                     height:
@@ -630,6 +640,10 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                                                   ),
                                                                   if (isLastMove)
                                                                     Container(
+                                                                      key:
+                                                                          const ValueKey(
+                                                                        'omok-last-move-marker',
+                                                                      ),
                                                                       width:
                                                                           stoneSize +
                                                                               6,
@@ -643,7 +657,7 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                                                         border:
                                                                             Border.all(
                                                                           color:
-                                                                              const Color(0xFFE678A9),
+                                                                              DearColors.coralText,
                                                                           width:
                                                                               2,
                                                                         ),
@@ -769,10 +783,11 @@ class _OmokStatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     Widget titleWidget() => Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: emphasized ? DearColors.coralText : DearColors.secondary,
+                color: emphasized ? scheme.primary : scheme.onSurfaceVariant,
                 fontWeight: FontWeight.w900,
               ),
         );
@@ -858,6 +873,7 @@ class _OmokCoordinatePickerSheetState
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final sessionAsync = ref.watch(omokSessionProvider(widget.sessionId));
     final movesAsync = ref.watch(omokMovesProvider(widget.sessionId));
     final session = sessionAsync.valueOrNull;
@@ -979,7 +995,7 @@ class _OmokCoordinatePickerSheetState
               Text(
                 '행과 열을 선택하고 현재 칸의 상태를 확인한 뒤 돌을 놓아 주세요.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: DearColors.secondary,
+                      color: scheme.onSurfaceVariant,
                     ),
               ),
               const SizedBox(height: DearSpacing.space20),
@@ -1028,10 +1044,10 @@ class _OmokCoordinatePickerSheetState
                   child: Container(
                     padding: const EdgeInsets.all(DearSpacing.space12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      color: scheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(DearRadii.control),
                       border: Border.all(
-                        color: Theme.of(context).colorScheme.outlineVariant,
+                        color: scheme.outlineVariant,
                       ),
                     ),
                     child: Text(
@@ -1143,12 +1159,12 @@ class _OmokConnectionBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final foreground =
-        reconnecting ? const Color(0xFF82551A) : const Color(0xFF28613E);
+        reconnecting ? scheme.onErrorContainer : scheme.onTertiaryContainer;
     final background =
-        reconnecting ? const Color(0xFFFFF3D9) : const Color(0xFFEAF7EE);
-    final border =
-        reconnecting ? const Color(0xFFE8C884) : const Color(0xFFB9DDC4);
+        reconnecting ? scheme.errorContainer : scheme.tertiaryContainer;
+    final border = reconnecting ? scheme.error : scheme.tertiary;
     final label =
         reconnecting ? '연결을 다시 확인하고 있어요' : '실시간 연결됨 · 착수와 턴 상태를 자동으로 받고 있어요';
 
@@ -1213,6 +1229,7 @@ class _OmokGameSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
       child: Column(
@@ -1220,7 +1237,7 @@ class _OmokGameSkeleton extends StatelessWidget {
           Container(
             height: 42,
             decoration: BoxDecoration(
-              color: DearColors.blushDeep,
+              color: scheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(10),
             ),
           ),
@@ -1233,9 +1250,9 @@ class _OmokGameSkeleton extends StatelessWidget {
                 aspectRatio: 1,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: DearColors.blushDeep,
+                    color: scheme.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: DearColors.line),
+                    border: Border.all(color: scheme.outlineVariant),
                   ),
                 ),
               ),

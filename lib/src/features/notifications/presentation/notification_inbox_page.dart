@@ -112,6 +112,7 @@ class _InboxTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final icon = switch (item.category) {
       'anniversary' => Icons.favorite_rounded,
       'image' => Icons.photo_outlined,
@@ -119,8 +120,9 @@ class _InboxTile extends StatelessWidget {
       _ => Icons.chat_bubble_outline_rounded,
     };
     return DearCard(
+      key: ValueKey('notification-inbox-${item.id}'),
       padding: EdgeInsets.zero,
-      color: item.isUnread ? DearColors.coralSoft : DearColors.card,
+      color: item.isUnread ? scheme.primaryContainer : scheme.surface,
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(DearRadii.medium),
@@ -135,7 +137,6 @@ class _InboxTile extends StatelessWidget {
                   icon: icon,
                   size: 48,
                   iconSize: 23,
-                  color: DearColors.coralText,
                 ),
                 const SizedBox(width: 13),
                 Expanded(
@@ -149,8 +150,8 @@ class _InboxTile extends StatelessWidget {
                               item.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: DearColors.ink,
+                              style: TextStyle(
+                                color: scheme.onSurface,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -158,9 +159,9 @@ class _InboxTile extends StatelessWidget {
                           if (item.isUnread)
                             Semantics(
                               label: '읽지 않음',
-                              child: const CircleAvatar(
+                              child: CircleAvatar(
                                 radius: 4,
-                                backgroundColor: DearColors.coralText,
+                                backgroundColor: scheme.primary,
                               ),
                             ),
                         ],
@@ -170,16 +171,18 @@ class _InboxTile extends StatelessWidget {
                         item.body,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: DearColors.secondary,
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant,
                           height: 1.35,
                         ),
                       ),
                       const SizedBox(height: 5),
                       Text(
                         _timeLabel(item.createdAt),
-                        style: const TextStyle(
-                          color: DearColors.muted,
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant.withValues(
+                            alpha: 0.78,
+                          ),
                           fontSize: 12,
                         ),
                       ),
@@ -202,6 +205,7 @@ class _InboxSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ListView.separated(
       padding: const EdgeInsets.all(20),
       itemCount: 5,
@@ -209,7 +213,7 @@ class _InboxSkeleton extends StatelessWidget {
       itemBuilder: (_, __) => Container(
         height: 96,
         decoration: BoxDecoration(
-          color: DearColors.blushDeep,
+          color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(DearRadii.medium),
         ),
       ),

@@ -1,3 +1,5 @@
+import 'package:couple_chat_app/src/common/app_theme.dart';
+import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/onboarding/presentation/onboarding_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,6 +78,54 @@ void main() {
 
     expect(find.text('둘만의 대화'), findsOneWidget);
     expect(find.text('다음'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 모드는 semantic 색을 쓰고 Reduce Motion에서 즉시 전환한다', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final theme = AppTheme.dark();
+
+    await tester.pumpWidget(
+      MaterialApp.router(
+        theme: theme,
+        routerConfig: buildRouter(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final card = tester.widget<DearCard>(
+      find.byKey(const ValueKey('onboarding-card-0')),
+    );
+    expect(card.color, theme.colorScheme.surface.withValues(alpha: 0.92));
+    expect(
+      tester.widget<Text>(find.text('둘만의 대화')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.text('메시지와 사진으로 오늘의 마음을 가장 가까이에서 나눠요.'),
+          )
+          .style
+          ?.color,
+      theme.colorScheme.onSurfaceVariant,
+    );
+    expect(
+      tester
+          .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
+          .map((indicator) => indicator.duration),
+      everyElement(Duration.zero),
+    );
+
+    await tester.tap(find.byKey(const Key('onboarding-next-button')));
+    await tester.pump();
+
+    expect(find.text('함께 쌓는 추억 앨범'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

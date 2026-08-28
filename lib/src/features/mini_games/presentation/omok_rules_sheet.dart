@@ -1,4 +1,3 @@
-import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:flutter/material.dart';
 
 Future<void> showOmokRulesSheet(BuildContext context) {
@@ -16,7 +15,7 @@ Future<void> showOmokRulesSheet(BuildContext context) {
             Text(
               '오목 규칙',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: DearColors.ink,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -60,23 +59,25 @@ class _RuleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
+            key: ValueKey('omok-rule-number-$number'),
             width: 28,
             height: 28,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: DearColors.coralSoft,
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer,
               shape: BoxShape.circle,
             ),
             child: Text(
               number,
-              style: const TextStyle(
-                color: DearColors.coralText,
+              style: TextStyle(
+                color: scheme.onPrimaryContainer,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -86,7 +87,7 @@ class _RuleRow extends StatelessWidget {
             child: Text(
               text,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: DearColors.secondary,
+                    color: scheme.onSurfaceVariant,
                     height: 1.5,
                   ),
             ),

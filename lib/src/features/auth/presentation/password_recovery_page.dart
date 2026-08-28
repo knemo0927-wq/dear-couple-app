@@ -60,6 +60,7 @@ class _PasswordRecoveryPageState extends ConsumerState<PasswordRecoveryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('새 비밀번호 설정')),
       body: DearBackground(
@@ -77,15 +78,15 @@ class _PasswordRecoveryPageState extends ConsumerState<PasswordRecoveryPage> {
                 '새 비밀번호를 입력해 주세요',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: DearColors.ink,
+                      color: scheme.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 '영문과 숫자를 포함해 8자 이상으로 설정해 주세요.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: DearColors.secondary),
+                style: TextStyle(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 32),
               Form(

@@ -54,6 +54,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: DearBackground(
         child: Stack(
@@ -79,7 +80,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           'Dear',
                           style:
                               Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    color: DearColors.coralText,
+                                    color: scheme.primary,
                                     fontWeight: FontWeight.w700,
                                   ),
                         ),
@@ -87,7 +88,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         TextButton(
                           onPressed: () => context.go('/auth'),
                           style: TextButton.styleFrom(
-                            foregroundColor: DearColors.secondary,
+                            foregroundColor: scheme.onSurfaceVariant,
                             minimumSize: const Size(44, 44),
                           ),
                           child: const Text('건너뛰기'),
@@ -106,9 +107,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         return Padding(
                           padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                           child: DearCard(
+                            key: ValueKey('onboarding-card-$i'),
                             padding: const EdgeInsets.all(24),
                             radius: DearRadii.large,
-                            color: Colors.white.withValues(alpha: 0.92),
+                            color: scheme.surface.withValues(alpha: 0.92),
                             child: LayoutBuilder(
                               builder: (context, constraints) {
                                 return SingleChildScrollView(
@@ -128,13 +130,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                             gradient: DearGradients.softCardFor(
                                                 context),
                                             border: Border.all(
-                                              color: DearColors.line,
+                                              color: scheme.outlineVariant,
                                             ),
                                           ),
                                           child: Icon(
                                             item.icon,
                                             size: 60,
-                                            color: DearColors.coral,
+                                            color: scheme.primary,
                                           ),
                                         ),
                                         const SizedBox(height: 24),
@@ -144,7 +146,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                               .textTheme
                                               .labelMedium
                                               ?.copyWith(
-                                                color: DearColors.coralText,
+                                                color: scheme.primary,
                                                 fontWeight: FontWeight.w800,
                                                 letterSpacing: 1.4,
                                               ),
@@ -157,7 +159,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                               .textTheme
                                               .headlineSmall
                                               ?.copyWith(
-                                                color: DearColors.ink,
+                                                color: scheme.onSurface,
                                                 fontWeight: FontWeight.w800,
                                               ),
                                           textAlign: TextAlign.center,
@@ -169,7 +171,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                               .textTheme
                                               .bodyLarge
                                               ?.copyWith(
-                                                color: DearColors.secondary,
+                                                color: scheme.onSurfaceVariant,
                                                 height: 1.5,
                                               ),
                                           textAlign: TextAlign.center,
@@ -192,15 +194,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       children: List.generate(
                         _items.length,
                         (i) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
+                          duration: DearMotion.duration(
+                            context,
+                            DearMotion.standard,
+                          ),
                           margin: const EdgeInsets.symmetric(horizontal: 4),
                           width: _index == i ? 20 : 8,
                           height: 8,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(999),
                             color: _index == i
-                                ? DearColors.coral
-                                : DearColors.line,
+                                ? scheme.primary
+                                : scheme.outlineVariant,
                           ),
                         ),
                       ),
@@ -213,10 +218,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       height: 56,
                       onPressed: () {
                         if (_index < _items.length - 1) {
-                          _controller.nextPage(
-                            duration: const Duration(milliseconds: 260),
-                            curve: Curves.easeOut,
-                          );
+                          if (MediaQuery.disableAnimationsOf(context)) {
+                            _controller.jumpToPage(_index + 1);
+                          } else {
+                            _controller.nextPage(
+                              duration: DearMotion.emphasized,
+                              curve: DearMotion.enterCurve,
+                            );
+                          }
                         } else {
                           context.go('/auth');
                         }
@@ -241,14 +250,15 @@ class _PetalBlob extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Opacity(
       opacity: 0.34,
       child: Container(
         width: size,
         height: size,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: DearColors.coralSoft,
+          color: scheme.primaryContainer,
         ),
       ),
     );
