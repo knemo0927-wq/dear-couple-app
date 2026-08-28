@@ -366,7 +366,7 @@ class _RecordSummary extends StatelessWidget {
       child: ExcludeSemantics(
         child: DearCard(
           padding: const EdgeInsets.all(18),
-          gradient: DearGradients.softCard,
+          gradient: DearGradients.softCardFor(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

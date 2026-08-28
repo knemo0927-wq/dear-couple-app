@@ -266,8 +266,8 @@ class _CoupleChatAppState extends ConsumerState<CoupleChatApp>
     return MaterialApp.router(
       title: 'Dear',
       theme: AppTheme.light(),
-      darkTheme: AppTheme.light(),
-      themeMode: ThemeMode.light,
+      darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.system,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       routerConfig: router,
       builder: (context, child) => DearConnectionBanner(child: child!),

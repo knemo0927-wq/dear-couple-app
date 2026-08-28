@@ -60,6 +60,33 @@ class DearGradients {
       DearColors.blushDeep,
     ],
   );
+
+  static LinearGradient backgroundFor(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        scheme.surfaceContainerLowest,
+        scheme.surfaceContainerLow,
+        scheme.surfaceContainer,
+      ],
+      stops: const [0, 0.68, 1],
+    );
+  }
+
+  static LinearGradient softCardFor(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        scheme.surface,
+        scheme.surfaceContainerLow,
+        scheme.surfaceContainerHigh,
+      ],
+    );
+  }
 }
 
 class DearRadii {
@@ -210,7 +237,7 @@ class DearBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(gradient: DearGradients.background),
+      decoration: BoxDecoration(gradient: DearGradients.backgroundFor(context)),
       child: child,
     );
   }
@@ -223,8 +250,8 @@ class DearCard extends StatelessWidget {
     this.margin = EdgeInsets.zero,
     this.radius = DearRadii.card,
     this.gradient,
-    this.color = DearColors.card,
-    this.borderColor = DearColors.line,
+    this.color,
+    this.borderColor,
     this.shadowOpacity = 1,
     super.key,
   });
@@ -234,21 +261,28 @@ class DearCard extends StatelessWidget {
   final EdgeInsetsGeometry margin;
   final double radius;
   final Gradient? gradient;
-  final Color color;
-  final Color borderColor;
+  final Color? color;
+  final Color? borderColor;
   final double shadowOpacity;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: gradient == null ? color : null,
+        color: gradient == null ? color ?? scheme.surface : null,
         gradient: gradient,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor),
-        boxShadow: dearSoftShadow(shadowOpacity),
+        border: Border.all(color: borderColor ?? scheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withValues(alpha: 0.07 * shadowOpacity),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: child,
     );
@@ -333,27 +367,29 @@ class DearIconBubble extends StatelessWidget {
     required this.icon,
     this.size = 54,
     this.iconSize = 27,
-    this.background = DearColors.coralSoft,
-    this.color = DearColors.coral,
+    this.background,
+    this.color,
     super.key,
   });
 
   final IconData icon;
   final double size;
   final double iconSize;
-  final Color background;
-  final Color color;
+  final Color? background;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: background,
+        color: background ?? scheme.primaryContainer,
         borderRadius: BorderRadius.circular(DearRadii.chip),
       ),
-      child: Icon(icon, size: iconSize, color: color),
+      child:
+          Icon(icon, size: iconSize, color: color ?? scheme.onPrimaryContainer),
     );
   }
 }

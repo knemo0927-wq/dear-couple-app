@@ -247,7 +247,7 @@ class _MiniGamesPageState extends ConsumerState<MiniGamesPage> {
                 DearCard(
                   padding: const EdgeInsets.all(18),
                   radius: DearRadii.large,
-                  gradient: DearGradients.softCard,
+                  gradient: DearGradients.softCardFor(context),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

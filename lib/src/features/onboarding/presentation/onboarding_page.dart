@@ -125,7 +125,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                           height: 136,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            gradient: DearGradients.softCard,
+                                            gradient: DearGradients.softCardFor(
+                                                context),
                                             border: Border.all(
                                               color: DearColors.line,
                                             ),

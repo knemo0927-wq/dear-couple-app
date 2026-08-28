@@ -59,6 +59,95 @@ void main() {
       expect(outlinedSide!.color, DearColors.outlineStrong);
       expect(theme.colorScheme.outline, DearColors.outlineStrong);
     });
+
+    test('dark theme defines readable surfaces, controls, and system overlays',
+        () {
+      final theme = AppTheme.dark();
+      final scheme = theme.colorScheme;
+      final input = theme.inputDecorationTheme;
+      final enabledBorder = input.enabledBorder! as OutlineInputBorder;
+      final cardShape = theme.cardTheme.shape! as RoundedRectangleBorder;
+
+      expect(theme.brightness, Brightness.dark);
+      expect(theme.scaffoldBackgroundColor, scheme.surfaceContainerLowest);
+      expect(theme.cardTheme.color, scheme.surface);
+      expect(input.fillColor, scheme.surfaceContainer);
+      expect(enabledBorder.borderSide.color, scheme.outline);
+      expect(cardShape.borderRadius, BorderRadius.circular(DearRadii.card));
+      expect(
+        theme.appBarTheme.systemOverlayStyle!.statusBarIconBrightness,
+        Brightness.light,
+      );
+      expect(_contrast(scheme.onSurface, scheme.surface), greaterThan(4.5));
+      expect(
+        _contrast(scheme.onSurfaceVariant, scheme.surface),
+        greaterThan(4.5),
+      );
+      expect(_contrast(scheme.outline, scheme.surface), greaterThan(3));
+      expect(
+        _contrast(input.hintStyle!.color!, input.fillColor!),
+        greaterThan(4.5),
+      );
+    });
+  });
+
+  testWidgets('Dear surfaces resolve from the active dark color scheme',
+      (tester) async {
+    final theme = AppTheme.dark();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: const DearBackground(
+          child: Center(
+            child: DearCard(
+              key: Key('dark-card'),
+              child: DearIconBubble(
+                key: Key('dark-icon-bubble'),
+                icon: Icons.favorite_rounded,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final background = tester.widget<DecoratedBox>(
+      find
+          .descendant(
+            of: find.byType(DearBackground),
+            matching: find.byType(DecoratedBox),
+          )
+          .first,
+    );
+    final backgroundGradient =
+        (background.decoration as BoxDecoration).gradient! as LinearGradient;
+    final card = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byKey(const Key('dark-card')),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final cardDecoration = card.decoration! as BoxDecoration;
+    final bubble = tester.widget<Container>(
+      find.descendant(
+        of: find.byKey(const Key('dark-icon-bubble')),
+        matching: find.byType(Container),
+      ),
+    );
+    final bubbleDecoration = bubble.decoration! as BoxDecoration;
+
+    expect(
+      backgroundGradient.colors.first,
+      theme.colorScheme.surfaceContainerLowest,
+    );
+    expect(cardDecoration.color, theme.colorScheme.surface);
+    expect(
+      (cardDecoration.border! as Border).top.color,
+      theme.colorScheme.outlineVariant,
+    );
+    expect(bubbleDecoration.color, theme.colorScheme.primaryContainer);
   });
 
   testWidgets('DearMotion removes duration when animations are disabled',

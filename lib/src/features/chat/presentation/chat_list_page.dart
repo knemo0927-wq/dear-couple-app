@@ -636,7 +636,7 @@ class _RelationshipHero extends StatelessWidget {
       child: DearCard(
         padding: EdgeInsets.zero,
         radius: 28,
-        gradient: DearGradients.softCard,
+        gradient: DearGradients.softCardFor(context),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
           child: Material(
