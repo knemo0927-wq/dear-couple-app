@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/common/dear_main_tab_nav.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
@@ -71,8 +72,10 @@ void main() {
     List<MemoryAlbumPhoto> photos = const [],
     _FakeMemoryAlbumRepository? repository,
     List<Override> overrides = const [],
+    ThemeData? theme,
+    Size size = const Size(390, 844),
   }) async {
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -131,7 +134,10 @@ void main() {
           ),
           ...overrides,
         ],
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(
+          theme: theme,
+          routerConfig: router,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -883,6 +889,51 @@ void main() {
       find.byKey(const ValueKey('move-selected-memory-photos')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 모드에서 앨범 카드와 생성 시트가 semantic surface와 text 색을 쓴다',
+      (tester) async {
+    final theme = AppTheme.dark();
+    await pumpAlbum(tester, theme: theme);
+
+    final albumTitle = tester.widget<Text>(find.text('우리의 여름').first);
+    expect(albumTitle.style?.color, theme.colorScheme.onSurface);
+
+    await tester.tap(find.byKey(const ValueKey('new-album-button')));
+    await tester.pumpAndSettle();
+
+    final sheetTitle = tester.widget<Text>(find.text('새 앨범 만들기'));
+    expect(sheetTitle.style?.color, theme.colorScheme.onSurface);
+    final coverLabel = tester.widget<Text>(find.text('표지 사진 (선택)'));
+    expect(coverLabel.style?.color, theme.colorScheme.onSurface);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('320pt와 300% 글자에서 핵심 앨범 이름을 축소하거나 말줄임하지 않는다', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    const longName = '처음 함께 떠난 아주 길고 소중한 여름 여행 앨범';
+    await pumpAlbum(
+      tester,
+      size: const Size(320, 700),
+      albums: [
+        MemoryAlbum(
+          id: album.id,
+          coupleId: album.coupleId,
+          name: longName,
+          createdBy: album.createdBy,
+          createdAt: album.createdAt,
+          updatedAt: album.updatedAt,
+          photoCount: album.photoCount,
+          isFeatured: album.isFeatured,
+        ),
+      ],
+    );
+
+    final visibleTitle = tester.widget<Text>(find.text(longName).first);
+    expect(visibleTitle.maxLines, isNull);
+    expect(visibleTitle.overflow, isNot(TextOverflow.ellipsis));
     expect(tester.takeException(), isNull);
   });
 }

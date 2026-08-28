@@ -13,6 +13,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _albumEmptyCoverAsset = 'assets/images/album/album_empty_cover.png';
 
+extension _MemoryAlbumThemeContext on BuildContext {
+  ColorScheme get albumColors => Theme.of(this).colorScheme;
+}
+
 class MemoryAlbumPage extends ConsumerStatefulWidget {
   const MemoryAlbumPage({super.key});
 
@@ -264,8 +268,8 @@ class _MemoryAlbumPageState extends ConsumerState<MemoryAlbumPage> {
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: DearColors.error,
-                foregroundColor: Colors.white,
+                backgroundColor: context.albumColors.error,
+                foregroundColor: context.albumColors.onError,
               ),
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('삭제'),
@@ -862,8 +866,8 @@ class _AllMemoryPhotosPageState extends ConsumerState<_AllMemoryPhotosPage> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: DearColors.error,
-              foregroundColor: Colors.white,
+              backgroundColor: context.albumColors.error,
+              foregroundColor: context.albumColors.onError,
             ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('삭제'),
@@ -1020,10 +1024,10 @@ class _MemoryAlbumHeaderButton extends StatelessWidget {
           width: 52,
           height: 52,
           decoration: BoxDecoration(
-            color: DearColors.coralSoft,
+            color: context.albumColors.primaryContainer,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: Icon(icon, color: DearColors.coral, size: iconSize),
+          child: Icon(icon, color: context.albumColors.primary, size: iconSize),
         ),
       ),
     );
@@ -1098,7 +1102,7 @@ class _SkeletonBox extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: DearColors.blushDeep.withValues(alpha: 0.7),
+        color: context.albumColors.surfaceContainerHigh.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(radius),
       ),
     );
@@ -1134,7 +1138,7 @@ class _AlbumErrorState extends StatelessWidget {
                   message,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: DearColors.ink,
+                        color: context.albumColors.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
@@ -1340,7 +1344,7 @@ class _CreateMemoryAlbumSheetState
           bottom: 12,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: DearColors.ink.withValues(alpha: 0.58),
+              color: context.albumColors.onSurface.withValues(alpha: 0.58),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Padding(
@@ -1369,9 +1373,9 @@ class _CreateMemoryAlbumSheetState
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: context.albumColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: SafeArea(
           top: false,
@@ -1387,7 +1391,7 @@ class _CreateMemoryAlbumSheetState
                       child: Text(
                         widget.title,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: DearColors.ink,
+                              color: context.albumColors.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
@@ -1420,7 +1424,7 @@ class _CreateMemoryAlbumSheetState
                 Text(
                   '표지 사진 (선택)',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: DearColors.ink,
+                        color: context.albumColors.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
@@ -1428,7 +1432,7 @@ class _CreateMemoryAlbumSheetState
                 Text(
                   '고르지 않으면 기본 표지가 사용돼요.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DearColors.secondary,
+                        color: context.albumColors.onSurfaceVariant,
                       ),
                 ),
                 const SizedBox(height: 10),
@@ -1451,9 +1455,10 @@ class _CreateMemoryAlbumSheetState
                       aspectRatio: 3 / 2,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: DearColors.blush,
+                          color: context.albumColors.surfaceContainer,
                           borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: DearColors.line),
+                          border: Border.all(
+                              color: context.albumColors.outlineVariant),
                         ),
                         child: _buildCoverPicker(context),
                       ),
@@ -1512,7 +1517,7 @@ class _AlbumCoverBadge extends StatelessWidget {
       top: 12,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: DearColors.ink.withValues(alpha: 0.44),
+          color: context.albumColors.onSurface.withValues(alpha: 0.44),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Padding(
@@ -1543,7 +1548,7 @@ class _AlbumActionSheet extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.albumColors.surface,
             borderRadius: BorderRadius.circular(26),
             boxShadow: dearSoftShadow(0.5),
           ),
@@ -1556,7 +1561,7 @@ class _AlbumActionSheet extends StatelessWidget {
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: DearColors.line,
+                    color: context.albumColors.outlineVariant,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -1587,18 +1592,20 @@ class _AlbumActionSheet extends StatelessWidget {
                                 .textTheme
                                 .titleMedium
                                 ?.copyWith(
-                                  color: DearColors.ink,
+                                  color: context.albumColors.onSurface,
                                   fontWeight: FontWeight.w900,
                                 ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '사진 ${album.photoCount}장',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: DearColors.secondary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: context.albumColors.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ],
                       ),
@@ -1616,9 +1623,9 @@ class _AlbumActionSheet extends StatelessWidget {
                     size: 44,
                     iconSize: 22,
                     background: album.isFeatured
-                        ? DearColors.blushDeep
-                        : DearColors.coralSoft,
-                    color: DearColors.coral,
+                        ? context.albumColors.surfaceContainerHigh
+                        : context.albumColors.primaryContainer,
+                    color: context.albumColors.primary,
                   ),
                   title: Text(
                     album.isFeatured ? '이미 대표 앨범이에요' : '대표 앨범으로 설정',
@@ -1687,7 +1694,7 @@ class _RecentPhotosHeader extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: DearColors.ink,
+                color: context.albumColors.onSurface,
                 fontWeight: FontWeight.w900,
               ),
         ),
@@ -1697,7 +1704,7 @@ class _RecentPhotosHeader extends StatelessWidget {
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             minimumSize: const Size(44, 44),
-            foregroundColor: DearColors.secondary,
+            foregroundColor: context.albumColors.onSurfaceVariant,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1705,7 +1712,7 @@ class _RecentPhotosHeader extends StatelessWidget {
               Text(
                 actionLabel,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: DearColors.secondary,
+                      color: context.albumColors.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                     ),
               ),
@@ -1741,7 +1748,7 @@ class _RecentMemoryPhotosGrid extends StatelessWidget {
               child: Text(
                 '최근 사진을 불러오지 못했어요.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: DearColors.secondary,
+                      color: context.albumColors.onSurfaceVariant,
                     ),
               ),
             ),
@@ -1766,7 +1773,7 @@ class _RecentMemoryPhotosGrid extends StatelessWidget {
                   child: Text(
                     '아직 최근 추억 사진이 없어요.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: DearColors.secondary,
+                          color: context.albumColors.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
                         ),
                   ),
@@ -1992,9 +1999,10 @@ class _AlbumImageFailure extends StatelessWidget {
                 semanticLabel: retryLabel,
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh_rounded),
-                color: DearColors.coralText,
+                color: context.albumColors.primary,
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.9),
+                  backgroundColor:
+                      context.albumColors.surface.withValues(alpha: 0.9),
                 ),
               ),
             ),
@@ -2067,7 +2075,7 @@ class _AlbumListView extends ConsumerWidget {
                 Text(
                   '첫 앨범을 만들어보세요',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: DearColors.ink,
+                        color: context.albumColors.onSurface,
                         fontWeight: FontWeight.w900,
                       ),
                   textAlign: TextAlign.center,
@@ -2077,7 +2085,7 @@ class _AlbumListView extends ConsumerWidget {
                   '둘만의 사진을 모아 한 장씩 쌓아갈 수 있어요.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DearColors.muted,
+                        color: context.albumColors.onSurfaceVariant,
                       ),
                 ),
                 const SizedBox(height: 18),
@@ -2203,9 +2211,11 @@ class _AlbumCoverCard extends StatelessWidget {
               Container(
                 height: large ? 210 : 94,
                 decoration: BoxDecoration(
-                  color: DearColors.blush,
-                  border: const Border(
-                    bottom: BorderSide(color: DearColors.line),
+                  color: context.albumColors.surfaceContainer,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: context.albumColors.outlineVariant,
+                    ),
                   ),
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(
@@ -2237,7 +2247,8 @@ class _AlbumCoverCard extends StatelessWidget {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: DearColors.ink.withValues(alpha: 0.42),
+                              color: context.albumColors.onSurface
+                                  .withValues(alpha: 0.42),
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.18),
@@ -2278,25 +2289,23 @@ class _AlbumCoverCard extends StatelessWidget {
                         children: [
                           Text(
                             album.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                             style: (large
                                     ? Theme.of(context).textTheme.titleLarge
                                     : Theme.of(context).textTheme.titleMedium)
                                 ?.copyWith(
-                              color: DearColors.ink,
+                              color: context.albumColors.onSurface,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             subtitle,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: DearColors.secondary,
-                                    ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: context.albumColors.onSurfaceVariant,
+                                ),
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -2309,18 +2318,19 @@ class _AlbumCoverCard extends StatelessWidget {
                                 tooltip: '앨범 메뉴',
                                 onPressed: onActions,
                                 icon: const Icon(Icons.more_vert_rounded),
-                                color: DearColors.secondary,
+                                color: context.albumColors.onSurfaceVariant,
                               ),
                               Container(
                                 width: 56,
                                 height: 56,
-                                decoration: const BoxDecoration(
-                                  color: DearColors.blushDeep,
+                                decoration: BoxDecoration(
+                                  color:
+                                      context.albumColors.surfaceContainerHigh,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.chevron_right_rounded,
-                                  color: DearColors.coral,
+                                  color: context.albumColors.primary,
                                 ),
                               ),
                             ],
@@ -2345,7 +2355,7 @@ class _AlbumCoverCard extends StatelessWidget {
                                               .textTheme
                                               .titleMedium)
                                       ?.copyWith(
-                                    color: DearColors.ink,
+                                    color: context.albumColors.onSurface,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
@@ -2358,7 +2368,8 @@ class _AlbumCoverCard extends StatelessWidget {
                                       .textTheme
                                       .bodySmall
                                       ?.copyWith(
-                                        color: DearColors.secondary,
+                                        color: context
+                                            .albumColors.onSurfaceVariant,
                                       ),
                                 ),
                               ],
@@ -2369,18 +2380,18 @@ class _AlbumCoverCard extends StatelessWidget {
                             tooltip: '앨범 메뉴',
                             onPressed: onActions,
                             icon: const Icon(Icons.more_vert_rounded),
-                            color: DearColors.secondary,
+                            color: context.albumColors.onSurfaceVariant,
                           ),
                           Container(
                             width: large ? 56 : 38,
                             height: large ? 56 : 38,
-                            decoration: const BoxDecoration(
-                              color: DearColors.blushDeep,
+                            decoration: BoxDecoration(
+                              color: context.albumColors.surfaceContainerHigh,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.chevron_right_rounded,
-                              color: DearColors.coral,
+                              color: context.albumColors.primary,
                             ),
                           ),
                         ],
@@ -2415,7 +2426,7 @@ class _AllAlbumsSection extends StatelessWidget {
             Text(
               '전체 앨범',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: DearColors.ink,
+                    color: context.albumColors.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -2423,13 +2434,13 @@ class _AllAlbumsSection extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
-                color: DearColors.coralSoft,
+                color: context.albumColors.primaryContainer,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 '${albums.length}',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: DearColors.coralText,
+                      color: context.albumColors.primary,
                       fontWeight: FontWeight.w900,
                     ),
               ),
@@ -2467,9 +2478,9 @@ class _AlbumListRow extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(minHeight: 82),
       decoration: BoxDecoration(
-        color: DearColors.card.withValues(alpha: 0.88),
+        color: context.albumColors.surface.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: context.albumColors.outlineVariant),
         boxShadow: dearSoftShadow(0.22),
       ),
       child: Material(
@@ -2505,13 +2516,15 @@ class _AlbumListRow extends StatelessWidget {
                           Expanded(
                             child: Text(
                               album.name,
-                              maxLines: largeText ? 2 : 1,
-                              overflow: TextOverflow.ellipsis,
+                              maxLines: largeText ? null : 1,
+                              overflow: largeText
+                                  ? TextOverflow.visible
+                                  : TextOverflow.ellipsis,
                               style: Theme.of(context)
                                   .textTheme
                                   .titleSmall
                                   ?.copyWith(
-                                    color: DearColors.ink,
+                                    color: context.albumColors.onSurface,
                                     fontWeight: FontWeight.w900,
                                   ),
                             ),
@@ -2524,7 +2537,7 @@ class _AlbumListRow extends StatelessWidget {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: DearColors.coralSoft,
+                                color: context.albumColors.primaryContainer,
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
@@ -2533,7 +2546,7 @@ class _AlbumListRow extends StatelessWidget {
                                     .textTheme
                                     .labelSmall
                                     ?.copyWith(
-                                      color: DearColors.coralText,
+                                      color: context.albumColors.primary,
                                       fontWeight: FontWeight.w900,
                                     ),
                               ),
@@ -2544,10 +2557,12 @@ class _AlbumListRow extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         '사진 ${album.photoCount}장  •  ${_memoryAlbumRecentLabel(album.updatedAt)}',
-                        maxLines: largeText ? 2 : 1,
-                        overflow: TextOverflow.ellipsis,
+                        maxLines: largeText ? null : 1,
+                        overflow: largeText
+                            ? TextOverflow.visible
+                            : TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DearColors.secondary,
+                              color: context.albumColors.onSurfaceVariant,
                               fontWeight: FontWeight.w600,
                             ),
                       ),
@@ -2557,7 +2572,7 @@ class _AlbumListRow extends StatelessWidget {
                           '대표 앨범',
                           style:
                               Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: DearColors.coralText,
+                                    color: context.albumColors.primary,
                                     fontWeight: FontWeight.w900,
                                   ),
                         ),
@@ -2570,7 +2585,7 @@ class _AlbumListRow extends StatelessWidget {
                   tooltip: '앨범 메뉴',
                   onPressed: onActions,
                   icon: const Icon(Icons.more_vert_rounded),
-                  color: DearColors.secondary,
+                  color: context.albumColors.onSurfaceVariant,
                 ),
               ],
             ),
@@ -2753,7 +2768,7 @@ class _AllMemoryPhotosView extends ConsumerWidget {
                         key: const ValueKey('all-photo-empty-message'),
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: DearColors.ink,
+                              color: context.albumColors.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
@@ -2833,7 +2848,7 @@ class _AllPhotoFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: DearColors.card.withValues(alpha: 0.96),
+      color: context.albumColors.surface.withValues(alpha: 0.96),
       child: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
@@ -2899,7 +2914,7 @@ class _PhotoDateFilterSheet extends StatelessWidget {
         title: Text(
           label,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: DearColors.ink,
+                color: context.albumColors.onSurface,
                 fontWeight: FontWeight.w800,
               ),
         ),
@@ -2914,7 +2929,7 @@ class _PhotoDateFilterSheet extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: DearColors.card,
+            color: context.albumColors.surface,
             borderRadius: BorderRadius.circular(24),
             boxShadow: dearSoftShadow(0.45),
           ),
@@ -2930,7 +2945,7 @@ class _PhotoDateFilterSheet extends StatelessWidget {
                     child: Text(
                       '사진 날짜 필터',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: DearColors.ink,
+                            color: context.albumColors.onSurface,
                             fontWeight: FontWeight.w900,
                           ),
                     ),
@@ -2991,7 +3006,7 @@ class _PhotoSelectionActionBar extends StatelessWidget {
       label: processing ? '선택한 사진 처리 중' : '사진 $selectedCount장 선택됨',
       child: Material(
         elevation: 12,
-        color: DearColors.card,
+        color: context.albumColors.surface,
         child: SafeArea(
           top: false,
           child: Padding(
@@ -3011,16 +3026,16 @@ class _PhotoSelectionActionBar extends StatelessWidget {
                   child: FilledButton.icon(
                     key: const ValueKey('delete-selected-memory-photos'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: DearColors.error,
-                      foregroundColor: Colors.white,
+                      backgroundColor: context.albumColors.error,
+                      foregroundColor: context.albumColors.onError,
                     ),
                     onPressed: processing ? null : onDelete,
                     icon: processing
-                        ? const SizedBox.square(
+                        ? SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: context.albumColors.onError,
                             ),
                           )
                         : const Icon(Icons.delete_outline_rounded),
@@ -3049,7 +3064,7 @@ class _MovePhotosAlbumSheet extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: DearColors.card,
+            color: context.albumColors.surface,
             borderRadius: BorderRadius.circular(24),
             boxShadow: dearSoftShadow(0.45),
           ),
@@ -3065,7 +3080,7 @@ class _MovePhotosAlbumSheet extends StatelessWidget {
                     child: Text(
                       '이동할 앨범 선택',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: DearColors.ink,
+                            color: context.albumColors.onSurface,
                             fontWeight: FontWeight.w900,
                           ),
                     ),
@@ -3076,8 +3091,10 @@ class _MovePhotosAlbumSheet extends StatelessWidget {
                     shrinkWrap: true,
                     padding: const EdgeInsets.only(bottom: 10),
                     itemCount: albums.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, color: DearColors.line),
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: context.albumColors.outlineVariant,
+                    ),
                     itemBuilder: (context, index) {
                       final album = albums[index];
                       return ListTile(
@@ -3137,7 +3154,7 @@ class _AlbumEmptyPhotoState extends StatelessWidget {
               Text(
                 '$albumName에 사진을 더해요',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: DearColors.ink,
+                      color: context.albumColors.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
                 textAlign: TextAlign.center,
@@ -3147,7 +3164,7 @@ class _AlbumEmptyPhotoState extends StatelessWidget {
                 '좋았던 장면을 여러 장 올려 앨범을 채워보세요.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: DearColors.muted,
+                      color: context.albumColors.onSurfaceVariant,
                     ),
               ),
               const SizedBox(height: 18),
@@ -3186,14 +3203,14 @@ class _AlbumUploadStatus extends StatelessWidget {
       key: const ValueKey('album-upload-status'),
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-      color: DearColors.card.withValues(alpha: 0.96),
+      color: context.albumColors.surface.withValues(alpha: 0.96),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '사진 업로드 중 $uploadedCount/$uploadTotal',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: DearColors.ink,
+                  color: context.albumColors.onSurface,
                   fontWeight: FontWeight.w800,
                 ),
           ),
@@ -3443,7 +3460,7 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.albumColors.surface,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: dearSoftShadow(0.45),
               ),
@@ -3461,14 +3478,14 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
                       title: Text(
                         widget.isCover ? '이미 대표 사진이에요' : '대표 사진으로 설정',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: DearColors.ink,
+                              color: context.albumColors.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
                       subtitle: Text(
                         '앨범 목록의 큰 사진으로 보여져요',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DearColors.secondary,
+                              color: context.albumColors.onSurfaceVariant,
                             ),
                       ),
                       enabled: !widget.isCover,
@@ -3479,16 +3496,19 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
                               widget.onSetAsCover?.call();
                             },
                     ),
-                    const Divider(height: 1, color: DearColors.line),
+                    Divider(
+                      height: 1,
+                      color: context.albumColors.outlineVariant,
+                    ),
                     ListTile(
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.close_rounded,
-                        color: DearColors.secondary,
+                        color: context.albumColors.onSurfaceVariant,
                       ),
                       title: Text(
                         '닫기',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: DearColors.secondary,
+                              color: context.albumColors.onSurfaceVariant,
                               fontWeight: FontWeight.w700,
                             ),
                       ),
@@ -3561,13 +3581,15 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
                     children: [
                       DecoratedBox(
                         decoration: BoxDecoration(
-                          color: DearColors.blush,
-                          border: Border.all(color: DearColors.line),
+                          color: context.albumColors.surfaceContainer,
+                          border: Border.all(
+                              color: context.albumColors.outlineVariant),
                         ),
                         child: Center(
                           child: Icon(
                             Icons.image_rounded,
-                            color: DearColors.coral.withValues(alpha: 0.6),
+                            color: context.albumColors.primary
+                                .withValues(alpha: 0.6),
                           ),
                         ),
                       ),
@@ -3610,7 +3632,8 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
                           top: 7,
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              color: DearColors.ink.withValues(alpha: 0.48),
+                              color: context.albumColors.onSurface
+                                  .withValues(alpha: 0.48),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Padding(
@@ -3648,11 +3671,12 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               color: widget.selected
-                                  ? DearColors.coral.withValues(alpha: 0.24)
+                                  ? context.albumColors.primary
+                                      .withValues(alpha: 0.24)
                                   : Colors.transparent,
                               border: Border.all(
                                 color: widget.selected
-                                    ? DearColors.coral
+                                    ? context.albumColors.primary
                                     : Colors.white.withValues(alpha: 0.72),
                                 width: widget.selected ? 3 : 1,
                               ),
@@ -3668,7 +3692,7 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
                                 ? Icons.check_circle_rounded
                                 : Icons.radio_button_unchecked_rounded,
                             color: widget.selected
-                                ? DearColors.coral
+                                ? context.albumColors.primary
                                 : Colors.white,
                             shadows: const [
                               Shadow(color: Colors.black38, blurRadius: 4),
