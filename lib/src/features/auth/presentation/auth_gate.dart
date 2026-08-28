@@ -18,13 +18,17 @@ class AuthPage extends ConsumerStatefulWidget {
 class _AuthPageState extends ConsumerState<AuthPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
 
   bool _submitting = false;
   bool _isSignIn = true;
   bool _obscurePassword = true;
-  bool _emailTouched = false;
-  bool _passwordTouched = false;
   bool _emailVerificationPending = false;
+  bool _showingValidationSummary = false;
+  String? _emailError;
+  String? _passwordError;
+  String? _formErrorSummary;
   String? _message;
 
   AuthEmailAction get _signIn => ref.read(authSignInProvider);
@@ -34,9 +38,20 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   AuthVoidAction get _signInWithApple => ref.read(authAppleSignInProvider);
 
   @override
+  void initState() {
+    super.initState();
+    _emailFocusNode.addListener(_validateEmailOnBlur);
+    _passwordFocusNode.addListener(_validatePasswordOnBlur);
+  }
+
+  @override
   void dispose() {
+    _emailFocusNode.removeListener(_validateEmailOnBlur);
+    _passwordFocusNode.removeListener(_validatePasswordOnBlur);
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -59,9 +74,75 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     return null;
   }
 
-  bool get _hasValidCredentials =>
-      _validateEmail(_emailController.text) == null &&
-      _validatePassword(_passwordController.text) == null;
+  String? _buildValidationSummary({
+    required String? emailError,
+    required String? passwordError,
+  }) {
+    final errors = <String>[
+      if (emailError != null) emailError,
+      if (passwordError != null) passwordError,
+    ];
+    if (errors.isEmpty) return null;
+    if (errors.length == 1) return errors.single;
+    return '입력한 내용을 확인해 주세요. ${errors.join(' ')}';
+  }
+
+  void _validateEmailOnBlur() {
+    if (_emailFocusNode.hasFocus || !mounted) return;
+    final error = _validateEmail(_emailController.text);
+    setState(() {
+      _emailError = error;
+      _refreshValidationSummary();
+    });
+  }
+
+  void _validatePasswordOnBlur() {
+    if (_passwordFocusNode.hasFocus || !mounted) return;
+    final error = _validatePassword(_passwordController.text);
+    setState(() {
+      _passwordError = error;
+      _refreshValidationSummary();
+    });
+  }
+
+  void _refreshValidationSummary() {
+    if (!_showingValidationSummary) return;
+    _formErrorSummary = _buildValidationSummary(
+      emailError: _emailError,
+      passwordError: _passwordError,
+    );
+    if (_formErrorSummary == null) _showingValidationSummary = false;
+  }
+
+  void _focusFirstError({
+    required String? emailError,
+    required String? passwordError,
+  }) {
+    final focusNode = emailError != null
+        ? _emailFocusNode
+        : passwordError != null
+            ? _passwordFocusNode
+            : null;
+    if (focusNode == null) return;
+    _requestFocusAfterFrame(focusNode);
+  }
+
+  void _requestFocusAfterFrame(FocusNode focusNode) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) focusNode.requestFocus();
+    });
+  }
+
+  void _handleCredentialChanged() {
+    if (_message == null &&
+        (_showingValidationSummary || _formErrorSummary == null)) {
+      return;
+    }
+    setState(() {
+      _message = null;
+      if (!_showingValidationSummary) _formErrorSummary = null;
+    });
+  }
 
   Future<bool> _run(
     Future<void> Function() action, {
@@ -71,6 +152,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     setState(() {
       _submitting = true;
       _message = null;
+      _formErrorSummary = null;
+      _showingValidationSummary = false;
     });
 
     try {
@@ -82,7 +165,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       return true;
     } catch (e) {
       if (!mounted) return false;
-      setState(() => _message = toFriendlyErrorMessage(e));
+      setState(() {
+        _formErrorSummary = toFriendlyErrorMessage(e);
+        _showingValidationSummary = false;
+      });
       return false;
     } finally {
       if (mounted) {
@@ -94,12 +180,23 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   Future<void> _submit() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final emailError = _validateEmail(email);
+    final passwordError = _validatePassword(password);
     setState(() {
-      _emailTouched = true;
-      _passwordTouched = true;
+      _emailError = emailError;
+      _passwordError = passwordError;
+      _formErrorSummary = _buildValidationSummary(
+        emailError: emailError,
+        passwordError: passwordError,
+      );
+      _showingValidationSummary = _formErrorSummary != null;
       _message = null;
     });
-    if (!_hasValidCredentials) {
+    if (emailError != null || passwordError != null) {
+      _focusFirstError(
+        emailError: emailError,
+        passwordError: passwordError,
+      );
       return;
     }
 
@@ -108,7 +205,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         () => _signIn(email: email, password: password),
         successMessage: '로그인 성공',
       );
-      if (!succeeded || !mounted) return;
+      if (!succeeded || !mounted) {
+        if (mounted) _requestFocusAfterFrame(_emailFocusNode);
+        return;
+      }
       final from = GoRouterState.of(context).uri.queryParameters['from'];
       context.go(resolvePostLoginDestination(from));
       return;
@@ -118,13 +218,18 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     final succeeded = await _run(() async {
       result = await _signUp(email: email, password: password);
     });
-    if (!succeeded || !mounted || result == null) return;
+    if (!succeeded || !mounted || result == null) {
+      if (mounted) _requestFocusAfterFrame(_emailFocusNode);
+      return;
+    }
 
     _passwordController.clear();
     if (result!.emailVerificationPending) {
       setState(() {
         _emailVerificationPending = true;
-        _passwordTouched = false;
+        _passwordError = null;
+        _formErrorSummary = null;
+        _showingValidationSummary = false;
         _message = null;
       });
       return;
@@ -135,12 +240,21 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    final emailError = _validateEmail(email);
     setState(() {
-      _emailTouched = true;
+      _emailError = emailError;
+      _formErrorSummary = _buildValidationSummary(
+        emailError: emailError,
+        passwordError: null,
+      );
+      _showingValidationSummary = _formErrorSummary != null;
       _message = null;
     });
-    final email = _emailController.text.trim();
-    if (_validateEmail(email) != null) return;
+    if (emailError != null) {
+      _focusFirstError(emailError: emailError, passwordError: null);
+      return;
+    }
 
     await _run(
       () => _sendPasswordReset(email),
@@ -159,7 +273,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     setState(() {
       _emailVerificationPending = false;
       _isSignIn = true;
-      _passwordTouched = false;
+      _passwordError = null;
+      _formErrorSummary = null;
+      _showingValidationSummary = false;
       _message = null;
     });
   }
@@ -252,72 +368,96 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         onChanged: (value) {
                           setState(() {
                             _isSignIn = value;
-                            _passwordTouched =
-                                _passwordController.text.isNotEmpty;
+                            _emailError = null;
+                            _passwordError = null;
+                            _formErrorSummary = null;
+                            _showingValidationSummary = false;
                             _message = null;
                           });
                         },
                       ),
                       SizedBox(height: isCompactHeight ? 16 : 26),
-                      TextField(
-                        key: const Key('auth-email-field'),
-                        controller: _emailController,
-                        enabled: !_submitting,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autocorrect: false,
-                        autofillHints: const [AutofillHints.email],
-                        onChanged: (_) => setState(() {
-                          _emailTouched = true;
-                          _message = null;
-                        }),
-                        decoration: InputDecoration(
-                          hintText: '이메일',
-                          prefixIcon: const Icon(Icons.mail_outline_rounded),
-                          errorText: _emailTouched
-                              ? _validateEmail(_emailController.text)
-                              : null,
-                        ),
-                      ),
-                      SizedBox(height: fieldGap),
-                      TextField(
-                        key: const Key('auth-password-field'),
-                        controller: _passwordController,
-                        enabled: !_submitting,
-                        obscureText: _obscurePassword,
-                        textInputAction: TextInputAction.done,
-                        autofillHints: [
-                          _isSignIn
-                              ? AutofillHints.password
-                              : AutofillHints.newPassword,
-                        ],
-                        onChanged: (_) => setState(() {
-                          _passwordTouched = true;
-                          _message = null;
-                        }),
-                        onSubmitted: (_) {
-                          if (!_submitting) _submit();
-                        },
-                        decoration: InputDecoration(
-                          hintText: '비밀번호',
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                          errorText: _passwordTouched
-                              ? _validatePassword(_passwordController.text)
-                              : null,
-                          suffixIcon: IconButton(
-                            key: const Key('password-visibility-toggle'),
-                            tooltip: _obscurePassword ? '비밀번호 표시' : '비밀번호 숨기기',
-                            onPressed: _submitting
-                                ? null
-                                : () => setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    }),
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
+                      if (_formErrorSummary != null) ...[
+                        _AuthErrorSummary(message: _formErrorSummary!),
+                        SizedBox(height: fieldGap),
+                      ],
+                      AutofillGroup(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              key: const Key('auth-email-field'),
+                              controller: _emailController,
+                              focusNode: _emailFocusNode,
+                              enabled: !_submitting,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              autocorrect: false,
+                              autofillHints: const [AutofillHints.email],
+                              onChanged: (_) => _handleCredentialChanged(),
+                              onSubmitted: (_) {
+                                if (!_submitting) {
+                                  _passwordFocusNode.requestFocus();
+                                }
+                              },
+                              decoration: InputDecoration(
+                                labelText: '이메일',
+                                hintText: '예: name@example.com',
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.always,
+                                prefixIcon:
+                                    const Icon(Icons.mail_outline_rounded),
+                                errorText: _emailError,
+                              ),
                             ),
-                          ),
+                            SizedBox(height: fieldGap),
+                            TextField(
+                              key: const Key('auth-password-field'),
+                              controller: _passwordController,
+                              focusNode: _passwordFocusNode,
+                              enabled: !_submitting,
+                              obscureText: _obscurePassword,
+                              keyboardType: TextInputType.visiblePassword,
+                              textInputAction: TextInputAction.done,
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              autofillHints: [
+                                _isSignIn
+                                    ? AutofillHints.password
+                                    : AutofillHints.newPassword,
+                              ],
+                              onChanged: (_) => _handleCredentialChanged(),
+                              onSubmitted: (_) {
+                                if (!_submitting) _submit();
+                              },
+                              decoration: InputDecoration(
+                                labelText: '비밀번호',
+                                hintText:
+                                    _isSignIn ? '비밀번호 입력' : '예: 6자 이상의 비밀번호',
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.always,
+                                prefixIcon:
+                                    const Icon(Icons.lock_outline_rounded),
+                                errorText: _passwordError,
+                                suffixIcon: IconButton(
+                                  key: const Key('password-visibility-toggle'),
+                                  tooltip:
+                                      _obscurePassword ? '비밀번호 표시' : '비밀번호 숨기기',
+                                  onPressed: _submitting
+                                      ? null
+                                      : () => setState(() {
+                                            _obscurePassword =
+                                                !_obscurePassword;
+                                          }),
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       SizedBox(height: isCompactHeight ? 8 : 12),
@@ -428,6 +568,54 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthErrorSummary extends StatelessWidget {
+  const _AuthErrorSummary({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      key: const Key('auth-error-summary'),
+      container: true,
+      liveRegion: true,
+      label: '입력 오류. $message',
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.errorContainer,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.error_outline_rounded,
+                  color: scheme.onErrorContainer,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onErrorContainer,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -589,6 +777,7 @@ class PairingPage extends ConsumerStatefulWidget {
 
 class _PairingPageState extends ConsumerState<PairingPage> {
   final _pairingCodeController = TextEditingController();
+  final _pairingCodeFocusNode = FocusNode();
   bool _submitting = false;
   bool _rotatingCode = false;
   bool _sharingCode = false;
@@ -606,6 +795,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
   @override
   void dispose() {
     _pairingCodeController.dispose();
+    _pairingCodeFocusNode.dispose();
     super.dispose();
   }
 
@@ -615,6 +805,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
     final code = _pairingCodeController.text.trim().toUpperCase();
     if (code.length != 4) {
       setState(() => _message = '4자리 초대 코드를 모두 입력해 주세요.');
+      _pairingCodeFocusNode.requestFocus();
       return;
     }
 
@@ -750,6 +941,8 @@ class _PairingPageState extends ConsumerState<PairingPage> {
         }
 
         final theme = Theme.of(context);
+        final usesLargeTextLayout =
+            MediaQuery.textScalerOf(context).scale(1) >= 1.5;
         final invitationCode =
             (_rotatedPairingCode ?? profile.pairingCode).trim().toUpperCase();
 
@@ -812,44 +1005,11 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            const DearIconBubble(
-                              icon: Icons.person_outline_rounded,
-                              size: 48,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '내 초대 코드',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: DearColors.ink,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                            OutlinedButton.icon(
-                              key: const Key('rotate-pairing-code-button'),
-                              onPressed: _rotatingCode || _sharingCode
-                                  ? null
-                                  : _confirmAndRotatePairingCode,
-                              icon: _rotatingCode
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.refresh_rounded,
-                                      size: 18,
-                                    ),
-                              label: Text(
-                                _rotatingCode ? '생성 중...' : '새 코드 생성',
-                              ),
-                            ),
-                          ],
+                        _PairingInviteHeader(
+                          stacked: usesLargeTextLayout,
+                          rotating: _rotatingCode,
+                          sharing: _sharingCode,
+                          onRotate: _confirmAndRotatePairingCode,
                         ),
                         if (_invitationMessage != null) ...[
                           const SizedBox(height: 12),
@@ -872,8 +1032,11 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                               SelectableText(
                                 invitationCode,
                                 textAlign: TextAlign.center,
-                                style: theme.textTheme.displayMedium?.copyWith(
-                                  letterSpacing: 7,
+                                style: (usesLargeTextLayout
+                                        ? theme.textTheme.headlineLarge
+                                        : theme.textTheme.displayMedium)
+                                    ?.copyWith(
+                                  letterSpacing: usesLargeTextLayout ? 2 : 7,
                                   fontWeight: FontWeight.w900,
                                   color: DearColors.coralText,
                                   height: 1,
@@ -889,67 +1052,26 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                               const SizedBox(height: 22),
                               const Divider(color: DearColors.line),
                               const SizedBox(height: 14),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: _rotatingCode ||
-                                              invitationCode.isEmpty
-                                          ? null
-                                          : () async {
-                                              await Clipboard.setData(
-                                                ClipboardData(
-                                                  text: invitationCode,
-                                                ),
-                                              );
-                                              if (!context.mounted) return;
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                const SnackBar(
-                                                  content:
-                                                      Text('초대 코드를 복사했어요.'),
-                                                ),
-                                              );
-                                            },
-                                      icon: const Icon(Icons.copy_rounded),
-                                      label: const Text('복사'),
+                              _PairingInviteActions(
+                                stacked: usesLargeTextLayout,
+                                rotating: _rotatingCode,
+                                sharing: _sharingCode,
+                                enabled: invitationCode.isNotEmpty,
+                                onCopy: () async {
+                                  await Clipboard.setData(
+                                    ClipboardData(text: invitationCode),
+                                  );
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('초대 코드를 복사했어요.'),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Builder(
-                                      builder: (shareContext) =>
-                                          OutlinedButton.icon(
-                                        key: const Key(
-                                          'share-pairing-code-button',
-                                        ),
-                                        onPressed: _sharingCode ||
-                                                _rotatingCode ||
-                                                invitationCode.isEmpty
-                                            ? null
-                                            : () => _shareCode(
-                                                  invitationCode,
-                                                  shareContext,
-                                                ),
-                                        icon: _sharingCode
-                                            ? const SizedBox(
-                                                width: 18,
-                                                height: 18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                ),
-                                              )
-                                            : const Icon(
-                                                Icons.ios_share_rounded,
-                                              ),
-                                        label: Text(
-                                          _sharingCode ? '공유 중...' : '공유하기',
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  );
+                                },
+                                onShare: (shareContext) => _shareCode(
+                                  invitationCode,
+                                  shareContext,
+                                ),
                               ),
                             ],
                           ),
@@ -993,6 +1115,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                         const SizedBox(height: 18),
                         _PairingCodeInput(
                           controller: _pairingCodeController,
+                          focusNode: _pairingCodeFocusNode,
                           enabled: !_submitting,
                           onChanged: (_) {
                             if (_message != null) {
@@ -1097,92 +1220,268 @@ class _PairingPageState extends ConsumerState<PairingPage> {
   }
 }
 
+class _PairingInviteHeader extends StatelessWidget {
+  const _PairingInviteHeader({
+    required this.stacked,
+    required this.rotating,
+    required this.sharing,
+    required this.onRotate,
+  });
+
+  final bool stacked;
+  final bool rotating;
+  final bool sharing;
+  final VoidCallback onRotate;
+
+  Widget _title(BuildContext context) {
+    return Text(
+      '내 초대 코드',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: DearColors.ink,
+            fontWeight: FontWeight.w900,
+          ),
+    );
+  }
+
+  Widget _rotateButton() {
+    return OutlinedButton.icon(
+      key: const Key('rotate-pairing-code-button'),
+      onPressed: rotating || sharing ? null : onRotate,
+      icon: rotating
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.refresh_rounded, size: 18),
+      label: Text(rotating ? '생성 중...' : '새 코드 생성'),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const DearIconBubble(
+                icon: Icons.person_outline_rounded,
+                size: 48,
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: _title(context)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Align(alignment: Alignment.centerLeft, child: _rotateButton()),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        const DearIconBubble(
+          icon: Icons.person_outline_rounded,
+          size: 48,
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: _title(context)),
+        _rotateButton(),
+      ],
+    );
+  }
+}
+
+class _PairingInviteActions extends StatelessWidget {
+  const _PairingInviteActions({
+    required this.stacked,
+    required this.rotating,
+    required this.sharing,
+    required this.enabled,
+    required this.onCopy,
+    required this.onShare,
+  });
+
+  final bool stacked;
+  final bool rotating;
+  final bool sharing;
+  final bool enabled;
+  final Future<void> Function() onCopy;
+  final Future<void> Function(BuildContext context) onShare;
+
+  Widget _copyButton() {
+    return OutlinedButton.icon(
+      onPressed: rotating || !enabled ? null : onCopy,
+      icon: const Icon(Icons.copy_rounded),
+      label: const Text('복사'),
+    );
+  }
+
+  Widget _shareButton() {
+    return Builder(
+      builder: (shareContext) => OutlinedButton.icon(
+        key: const Key('share-pairing-code-button'),
+        onPressed: sharing || rotating || !enabled
+            ? null
+            : () => onShare(shareContext),
+        icon: sharing
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.ios_share_rounded),
+        label: Text(sharing ? '공유 중...' : '공유하기'),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _copyButton(),
+          const SizedBox(height: 10),
+          _shareButton(),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: _copyButton()),
+        const SizedBox(width: 12),
+        Expanded(child: _shareButton()),
+      ],
+    );
+  }
+}
+
 class _PairingCodeInput extends StatelessWidget {
   const _PairingCodeInput({
     required this.controller,
+    required this.focusNode,
     required this.enabled,
     required this.onChanged,
     required this.onSubmitted,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool enabled;
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmitted;
 
+  void _setTextFromSemantics(String text) {
+    const formatter = _PairingCodeFormatter();
+    final nextValue = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    final formatted = formatter.formatEditUpdate(controller.value, nextValue);
+    controller.value = formatted;
+    onChanged(formatted.text);
+    focusNode.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 72,
-      child: Stack(
-        children: [
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              final chars = value.text.toUpperCase().split('');
-              return Row(
-                children: List.generate(4, (index) {
-                  final active =
-                      chars.length >= 4 ? index == 3 : index == chars.length;
-                  final char = index < chars.length ? chars[index] : '';
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(right: index == 3 ? 0 : 8),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.86),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: active ? DearColors.coral : DearColors.line,
-                            width: active ? 1.6 : 1,
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        final chars = value.text.toUpperCase().split('');
+        return Semantics(
+          key: const Key('pairing-code-semantics'),
+          container: true,
+          excludeSemantics: true,
+          enabled: enabled,
+          textField: true,
+          focusable: enabled,
+          label: '페어링 코드 4자리',
+          value: '${chars.length}자리 입력됨',
+          hint: '영문 대문자와 숫자 4자리를 입력해 주세요.',
+          currentValueLength: chars.length,
+          maxValueLength: 4,
+          onTap: enabled ? focusNode.requestFocus : null,
+          onFocus: enabled ? focusNode.requestFocus : null,
+          onSetText: enabled ? _setTextFromSemantics : null,
+          child: SizedBox(
+            height: 72,
+            child: Stack(
+              children: [
+                ExcludeSemantics(
+                  child: Row(
+                    children: List.generate(4, (index) {
+                      final active = chars.length >= 4
+                          ? index == 3
+                          : index == chars.length;
+                      final char = index < chars.length ? chars[index] : '';
+                      return Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(right: index == 3 ? 0 : 8),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.86),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color:
+                                    active ? DearColors.coral : DearColors.line,
+                                width: active ? 1.6 : 1,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                char,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(
+                                      color: DearColors.coralText,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ),
                           ),
                         ),
-                        child: Center(
-                          child: Text(
-                            char,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
-                                  color: DearColors.coralText,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                        ),
-                      ),
+                      );
+                    }),
+                  ),
+                ),
+                Positioned.fill(
+                  child: TextField(
+                    key: const Key('pairing-code-field'),
+                    controller: controller,
+                    focusNode: focusNode,
+                    enabled: enabled,
+                    autofocus: false,
+                    textCapitalization: TextCapitalization.characters,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.done,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    inputFormatters: const [_PairingCodeFormatter()],
+                    onChanged: onChanged,
+                    onSubmitted: (_) => onSubmitted(),
+                    style: const TextStyle(color: Colors.transparent),
+                    cursorColor: DearColors.coral,
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
                     ),
-                  );
-                }),
-              );
-            },
-          ),
-          Positioned.fill(
-            child: TextField(
-              key: const Key('pairing-code-field'),
-              controller: controller,
-              enabled: enabled,
-              autofocus: false,
-              textCapitalization: TextCapitalization.characters,
-              keyboardType: TextInputType.text,
-              textInputAction: TextInputAction.done,
-              autocorrect: false,
-              enableSuggestions: false,
-              inputFormatters: const [_PairingCodeFormatter()],
-              onChanged: onChanged,
-              onSubmitted: (_) => onSubmitted(),
-              style: const TextStyle(color: Colors.transparent),
-              cursorColor: DearColors.coral,
-              decoration: const InputDecoration(
-                counterText: '',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                filled: false,
-              ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

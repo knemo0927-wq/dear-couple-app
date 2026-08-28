@@ -73,9 +73,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('이메일 또는 비밀번호가 올바르지 않아요.'), findsOneWidget);
+    expect(find.byKey(const Key('auth-error-summary')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('auth-email-field')))
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
   });
 
   testWidgets('빈 입력으로 로그인 시 검증 메시지를 노출한다', (tester) async {
+    final semantics = tester.ensureSemantics();
     final router = buildRouter();
 
     await tester.pumpWidget(
@@ -95,9 +104,39 @@ void main() {
 
     expect(find.text('이메일을 입력해 주세요.'), findsOneWidget);
     expect(find.text('비밀번호를 입력해 주세요.'), findsOneWidget);
+    final summary = tester.getSemantics(
+      find.byKey(const Key('auth-error-summary')),
+    );
+    expect(summary.label, contains('입력 오류'));
+    expect(summary.getSemanticsData().flagsCollection.isLiveRegion, isTrue);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('auth-email-field')))
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('auth-email-field')),
+      'valid@test.com',
+    );
+    final loginButton = find.widgetWithText(ElevatedButton, '로그인');
+    await tester.ensureVisible(loginButton);
+    await tester.pump();
+    await tester.tap(loginButton);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('auth-password-field')))
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+    semantics.dispose();
   });
 
-  testWidgets('이메일 형식과 회원가입 비밀번호 규칙을 입력 즉시 검증한다', (tester) async {
+  testWidgets('이메일과 회원가입 비밀번호는 입력 중이 아닌 blur에서 검증한다', (tester) async {
     final router = buildRouter();
 
     await tester.pumpWidget(
@@ -119,6 +158,10 @@ void main() {
       'not-an-email',
     );
     await tester.pump();
+    expect(find.text('올바른 이메일 형식을 입력해 주세요.'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('auth-password-field')));
+    await tester.pump();
     expect(find.text('올바른 이메일 형식을 입력해 주세요.'), findsOneWidget);
 
     await tester.tap(find.text('회원가입').first);
@@ -127,7 +170,57 @@ void main() {
       '123',
     );
     await tester.pump();
+    expect(find.text('비밀번호는 6자 이상 입력해 주세요.'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('auth-email-field')));
+    await tester.pump();
     expect(find.text('비밀번호는 6자 이상 입력해 주세요.'), findsOneWidget);
+  });
+
+  testWidgets('인증 입력은 지속 라벨·예시 힌트와 비밀번호 자동 완성 정보를 제공한다', (tester) async {
+    final router = buildRouter();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    final email = tester.widget<TextField>(
+      find.byKey(const Key('auth-email-field')),
+    );
+    final password = tester.widget<TextField>(
+      find.byKey(const Key('auth-password-field')),
+    );
+
+    expect(email.decoration?.labelText, '이메일');
+    expect(email.decoration?.hintText, '예: name@example.com');
+    expect(
+      email.decoration?.floatingLabelBehavior,
+      FloatingLabelBehavior.always,
+    );
+    expect(email.textInputAction, TextInputAction.next);
+    expect(email.autofillHints, contains(AutofillHints.email));
+
+    expect(password.decoration?.labelText, '비밀번호');
+    expect(password.decoration?.hintText, '비밀번호 입력');
+    expect(
+      password.decoration?.floatingLabelBehavior,
+      FloatingLabelBehavior.always,
+    );
+    expect(password.textInputAction, TextInputAction.done);
+    expect(password.autofillHints, contains(AutofillHints.password));
+
+    await tester.tap(find.text('회원가입').first);
+    await tester.pump();
+    final signUpPassword = tester.widget<TextField>(
+      find.byKey(const Key('auth-password-field')),
+    );
+    expect(signUpPassword.decoration?.hintText, '예: 6자 이상의 비밀번호');
+    expect(
+      signUpPassword.autofillHints,
+      contains(AutofillHints.newPassword),
+    );
   });
 
   testWidgets('비밀번호 표시 버튼으로 가림 상태를 전환한다', (tester) async {
@@ -285,8 +378,9 @@ void main() {
     expect(find.widgetWithText(ElevatedButton, '로그인'), findsOneWidget);
   });
 
-  testWidgets('390x844 기준 화면에서 인증 UI 레이아웃 오류가 없다', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
+  testWidgets('375pt·200% 글자에서 오류가 표시돼도 인증 UI가 overflow 없이 스크롤된다',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final router = buildRouter();
 
@@ -298,12 +392,29 @@ void main() {
             required String password,
           }) async {}),
         ],
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(
+          routerConfig: router,
+          builder: (context, child) {
+            final mediaQuery = MediaQuery.of(context);
+            return MediaQuery(
+              data: mediaQuery.copyWith(
+                textScaler: const TextScaler.linear(2),
+              ),
+              child: child!,
+            );
+          },
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.widgetWithText(ElevatedButton, '로그인'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('apple-sign-in-button')));
+    await tester.pump();
+
     expect(find.text('둘만의 공간'), findsOneWidget);
+    expect(find.byKey(const Key('auth-error-summary')), findsOneWidget);
     expect(find.byKey(const Key('auth-email-field')), findsOneWidget);
     expect(find.byKey(const Key('apple-sign-in-button')), findsOneWidget);
     expect(tester.takeException(), isNull);

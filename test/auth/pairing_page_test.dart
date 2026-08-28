@@ -5,6 +5,7 @@ import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
 import 'package:couple_chat_app/src/features/auth/presentation/auth_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -212,6 +213,7 @@ void main() {
   });
 
   testWidgets('공백과 기호가 섞인 4자리 붙여넣기를 정규화하고 키보드로 연결한다', (tester) async {
+    final semantics = tester.ensureSemantics();
     String? pairedCode;
     final router = GoRouter(
       initialLocation: '/',
@@ -251,19 +253,50 @@ void main() {
       320,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.enterText(codeField, 'ab');
+    await tester.pump();
+
+    final codeSemantics = tester.getSemantics(
+      find.byKey(const Key('pairing-code-semantics')),
+    );
+    expect(codeSemantics.label, '페어링 코드 4자리');
+    expect(codeSemantics.value, '2자리 입력됨');
+    expect(
+      codeSemantics.getSemanticsData().flagsCollection.isTextField,
+      isTrue,
+    );
+    expect(
+      codeSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    expect(
+      codeSemantics.getSemanticsData().hasAction(SemanticsAction.setText),
+      isTrue,
+    );
+    expect(find.bySemanticsLabel('A'), findsNothing);
+    expect(find.bySemanticsLabel('B'), findsNothing);
+
     await tester.enterText(codeField, 'ab-cd 12!zz');
     await tester.pump();
 
     expect(tester.widget<TextField>(codeField).controller!.text, 'ABCD');
+    expect(
+      tester
+          .getSemantics(find.byKey(const Key('pairing-code-semantics')))
+          .value,
+      '4자리 입력됨',
+    );
 
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
     expect(pairedCode, 'ABCD');
+    semantics.dispose();
   });
 
-  testWidgets('390x844 기준 화면에서 보안 과장 문구 없이 페어링 정보를 표시한다', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
+  testWidgets('375pt·200% 글자에서 보안 과장 문구 없이 페어링 화면이 overflow 없이 스크롤된다',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final router = GoRouter(
       initialLocation: '/',
@@ -289,7 +322,18 @@ void main() {
             ),
           ),
         ],
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(
+          routerConfig: router,
+          builder: (context, child) {
+            final mediaQuery = MediaQuery.of(context);
+            return MediaQuery(
+              data: mediaQuery.copyWith(
+                textScaler: const TextScaler.linear(2),
+              ),
+              child: child!,
+            );
+          },
+        ),
       ),
     );
     await tester.pumpAndSettle();
