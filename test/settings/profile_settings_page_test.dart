@@ -1,3 +1,4 @@
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
 import 'package:couple_chat_app/src/features/settings/presentation/profile_settings_page.dart';
@@ -66,6 +67,7 @@ void main() {
     WidgetTester tester, {
     List<Override> overrides = const [],
     double textScale = 1,
+    ThemeData? theme,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -81,6 +83,7 @@ void main() {
           ...overrides,
         ],
         child: MaterialApp.router(
+          theme: theme,
           routerConfig: router,
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context).copyWith(
@@ -271,6 +274,104 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('계정 삭제'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 모드에서 핵심 surface·text와 위험 작업이 의미 색상을 사용한다', (tester) async {
+    final theme = AppTheme.dark();
+    final scheme = theme.colorScheme;
+    await pumpMore(tester, theme: theme);
+
+    final profileCard = find.byKey(const ValueKey('more-profile-card-surface'));
+    final profileSurface = tester.widget<Container>(
+      find.descendant(of: profileCard, matching: find.byType(Container)).first,
+    );
+    final profileDecoration = profileSurface.decoration! as BoxDecoration;
+    expect(profileDecoration.color, scheme.surface);
+    expect(profileDecoration.border!.top.color, scheme.outlineVariant);
+
+    final avatar = tester.widget<CircleAvatar>(
+      find.descendant(of: profileCard, matching: find.byType(CircleAvatar)),
+    );
+    expect(avatar.backgroundColor, scheme.primaryContainer);
+    expect((avatar.child! as Icon).color, scheme.onPrimaryContainer);
+
+    final feature = find.byKey(const ValueKey('more-anniversary'));
+    final featureSurface = tester.widget<Material>(
+      find.descendant(of: feature, matching: find.byType(Material)).first,
+    );
+    expect(featureSurface.color, scheme.surface);
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: feature, matching: find.text('기념일')),
+          )
+          .style!
+          .color,
+      scheme.onSurface,
+    );
+
+    final deleteTile = find.byKey(const ValueKey('more-delete-account'));
+    await tester.scrollUntilVisible(
+      deleteTile,
+      260,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final dangerSurface = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('more-danger-group-surface')),
+    );
+    final dangerDecoration = dangerSurface.decoration as BoxDecoration;
+    expect(dangerDecoration.color, scheme.errorContainer);
+    expect(dangerDecoration.border!.top.color, scheme.error);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: deleteTile,
+              matching: find.byIcon(Icons.person_remove_outlined),
+            ),
+          )
+          .color,
+      scheme.error,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(of: deleteTile, matching: find.text('계정 삭제')),
+          )
+          .style!
+          .color,
+      scheme.onErrorContainer,
+    );
+
+    await tester.tap(deleteTile);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AlertDialog);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: dialog,
+              matching: find.byIcon(Icons.warning_amber_rounded),
+            ),
+          )
+          .color,
+      scheme.error,
+    );
+    final dangerButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('danger-confirm-button')),
+    );
+    expect(
+      dangerButton.style!.backgroundColor!.resolve(<WidgetState>{}),
+      scheme.error,
+    );
+    expect(
+      dangerButton.style!.foregroundColor!.resolve(<WidgetState>{}),
+      scheme.onError,
+    );
     expect(tester.takeException(), isNull);
   });
 }

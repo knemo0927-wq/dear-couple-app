@@ -285,7 +285,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
               Text(
                 '연결을 종료하려면 더보기 화면의 위험 작업에서 커플 연결 해제를 선택해 주세요.',
                 style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                      color: DearColors.secondary,
+                      color:
+                          Theme.of(sheetContext).colorScheme.onSurfaceVariant,
                     ),
               ),
             ],
@@ -453,12 +454,13 @@ class _ConfirmationDialogState extends State<_ConfirmationDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final phrase = widget.requiredPhrase;
     return AlertDialog(
       icon: widget.destructive
-          ? const Icon(
+          ? Icon(
               Icons.warning_amber_rounded,
-              color: DearColors.error,
+              color: scheme.error,
               size: DearIconSizes.large,
             )
           : null,
@@ -500,7 +502,10 @@ class _ConfirmationDialogState extends State<_ConfirmationDialog> {
         FilledButton(
           key: const ValueKey('danger-confirm-button'),
           style: widget.destructive
-              ? FilledButton.styleFrom(backgroundColor: DearColors.error)
+              ? FilledButton.styleFrom(
+                  backgroundColor: scheme.error,
+                  foregroundColor: scheme.onError,
+                )
               : null,
           onPressed: _confirmed ? _submit : null,
           child: Text(widget.confirmLabel),
@@ -762,7 +767,9 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DearCard(
+      key: const ValueKey('more-profile-card-surface'),
       radius: 18,
       padding: const EdgeInsets.all(18),
       shadowOpacity: 0.55,
@@ -779,7 +786,7 @@ class _ProfileHeader extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: DearColors.ink,
+                        color: scheme.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
@@ -791,14 +798,15 @@ class _ProfileHeader extends StatelessWidget {
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
                       size: 16,
-                      color: isPaired ? DearColors.coral : DearColors.secondary,
+                      color:
+                          isPaired ? scheme.primary : scheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
                         isPaired ? '상대와 연결됨' : '연결 대기 중',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DearColors.secondary,
+                              color: scheme.onSurfaceVariant,
                               fontWeight: FontWeight.w600,
                             ),
                       ),
@@ -828,16 +836,17 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final url = avatarUrl?.trim();
     return CircleAvatar(
       radius: radius,
-      backgroundColor: DearColors.coralSoft,
+      backgroundColor: scheme.primaryContainer,
       foregroundImage: url == null || url.isEmpty
           ? null
           : NetworkImage(url) as ImageProvider,
       child: Icon(
         Icons.favorite_rounded,
-        color: DearColors.coral,
+        color: scheme.onPrimaryContainer,
         size: radius * 0.85,
       ),
     );
@@ -925,11 +934,12 @@ class _FeatureButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: DearColors.card,
+      color: scheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: DearColors.line),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -948,15 +958,15 @@ class _FeatureButton extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: DearColors.ink,
+                          color: scheme.onSurface,
                           fontWeight: FontWeight.w800,
                         ),
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 20,
-                  color: DearColors.muted,
+                  color: scheme.onSurfaceVariant,
                 ),
               ],
             ),
@@ -982,6 +992,7 @@ class _SectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -992,7 +1003,7 @@ class _SectionHeading extends StatelessWidget {
                 child: Icon(
                   icon,
                   size: DearIconSizes.medium,
-                  color: danger ? DearColors.error : DearColors.coralText,
+                  color: danger ? scheme.error : scheme.primary,
                 ),
               ),
               const SizedBox(width: DearSpacing.space8),
@@ -1001,7 +1012,7 @@ class _SectionHeading extends StatelessWidget {
               child: Text(
                 title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: danger ? DearColors.error : DearColors.ink,
+                      color: danger ? scheme.error : scheme.onSurface,
                       fontWeight: FontWeight.w800,
                     ),
               ),
@@ -1013,7 +1024,9 @@ class _SectionHeading extends StatelessWidget {
           Text(
             subtitle!,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: DearColors.secondary,
+                  color: danger
+                      ? scheme.onErrorContainer
+                      : scheme.onSurfaceVariant,
                 ),
           ),
         ],
@@ -1040,9 +1053,11 @@ class _DangerGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return _TileGroup(
-      backgroundColor: const Color(0xFFFFF8F8),
-      borderColor: DearColors.error.withValues(alpha: 0.22),
+      surfaceKey: const ValueKey('more-danger-group-surface'),
+      backgroundColor: scheme.errorContainer,
+      borderColor: scheme.error,
       children: children,
     );
   }
@@ -1051,16 +1066,19 @@ class _DangerGroup extends StatelessWidget {
 class _TileGroup extends StatelessWidget {
   const _TileGroup({
     required this.children,
-    this.backgroundColor = DearColors.card,
-    this.borderColor = DearColors.line,
+    this.surfaceKey,
+    this.backgroundColor,
+    this.borderColor,
   });
 
   final List<Widget> children;
-  final Color backgroundColor;
-  final Color borderColor;
+  final Key? surfaceKey;
+  final Color? backgroundColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final divided = <Widget>[];
     for (var index = 0; index < children.length; index++) {
       if (index > 0) {
@@ -1070,10 +1088,11 @@ class _TileGroup extends StatelessWidget {
     }
 
     return DecoratedBox(
+      key: surfaceKey,
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: backgroundColor ?? scheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: borderColor ?? scheme.outlineVariant),
       ),
       child: Column(children: divided),
     );
@@ -1102,17 +1121,21 @@ class _MoreTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = danger ? DearColors.error : DearColors.ink;
+    final scheme = Theme.of(context).colorScheme;
+    final foreground = danger ? scheme.onErrorContainer : scheme.onSurface;
     return ListTile(
       minVerticalPadding: 14,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-      leading: Icon(icon, color: danger ? DearColors.error : DearColors.coral),
+      leading: Icon(icon, color: danger ? scheme.error : scheme.primary),
       title: Text(
         title,
         style: TextStyle(color: foreground, fontWeight: FontWeight.w700),
       ),
       subtitle: Text(
         subtitle,
+        style: TextStyle(
+          color: danger ? scheme.onErrorContainer : scheme.onSurfaceVariant,
+        ),
       ),
       trailing: busy
           ? const SizedBox.square(
@@ -1134,12 +1157,14 @@ class _InviteCodeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final value = code.trim();
     return DecoratedBox(
+      key: const ValueKey('profile-invite-code-surface'),
       decoration: BoxDecoration(
-        color: DearColors.card,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 18, 12, 18),
@@ -1149,7 +1174,7 @@ class _InviteCodeCard extends StatelessWidget {
               child: SelectableText(
                 value.isEmpty ? '코드 없음' : value,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: DearColors.coralText,
+                      color: scheme.primary,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 2,
                     ),
@@ -1205,13 +1230,14 @@ class _Skeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         width: width ?? double.infinity,
         height: height,
         decoration: BoxDecoration(
-          color: DearColors.coralSoft,
+          color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(14),
         ),
       ),

@@ -395,6 +395,79 @@ void main() {
     expect(permissionRequests, 0);
     expect(find.textContaining('기기 설정에서 Dear 알림을 허용'), findsOneWidget);
   });
+
+  testWidgets('다크 모드에서 상태·설정 surface와 핵심 text·control이 의미 색상을 사용한다',
+      (tester) async {
+    final theme = AppTheme.dark();
+    final scheme = theme.colorScheme;
+    await _pumpPage(
+      tester,
+      theme: theme,
+      authStream: Stream.value(_session('user-1')),
+      preferencesFor: (userId) => Stream.value(
+        _preferences(userId, quietEnabled: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final statusCard = tester.widget<Container>(
+      find.byKey(const Key('notification-system-status-card')),
+    );
+    final statusDecoration = statusCard.decoration! as BoxDecoration;
+    expect(statusDecoration.color, scheme.primaryContainer);
+    expect(statusDecoration.border!.top.color, scheme.outline);
+    expect(
+      tester
+          .widget<Text>(
+            find.text('기기 설정에서 알림을 허용해 주세요'),
+          )
+          .style!
+          .color,
+      scheme.onPrimaryContainer,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.text(
+              'Dear가 알림을 보낼 수 있도록 기기 설정에서 권한을 변경해 주세요.',
+            ),
+          )
+          .style!
+          .color,
+      scheme.onPrimaryContainer,
+    );
+
+    final receiveSection =
+        find.byKey(const Key('notification-receive-section'));
+    final receiveSurface = tester.widget<Container>(
+      find
+          .descendant(of: receiveSection, matching: find.byType(Container))
+          .first,
+    );
+    final receiveDecoration = receiveSurface.decoration! as BoxDecoration;
+    expect(receiveDecoration.color, scheme.surface);
+    expect(receiveDecoration.border!.top.color, scheme.outlineVariant);
+
+    final messageTile = _switchTile('메시지 알림');
+    final messageIcon = tester.widget<Icon>(
+      find.descendant(
+        of: messageTile,
+        matching: find.byIcon(Icons.chat_bubble_outline_rounded),
+      ),
+    );
+    expect(messageIcon.color, scheme.primary);
+    expect(
+      SwitchTheme.of(tester.element(messageTile))
+          .trackColor!
+          .resolve(<WidgetState>{WidgetState.selected}),
+      scheme.primary,
+    );
+    expect(
+      tester.widget<Text>(find.text('받을 알림')).style!.color,
+      scheme.onSurface,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Session _session(String userId) {
@@ -436,6 +509,7 @@ Future<void> _pumpPage(
   PushTokenRepository? pushRepository,
   Size size = const Size(390, 844),
   double textScale = 1,
+  ThemeData? theme,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -479,7 +553,7 @@ Future<void> _pumpPage(
         ),
       ],
       child: MaterialApp(
-        theme: AppTheme.light(),
+        theme: theme ?? AppTheme.light(),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),

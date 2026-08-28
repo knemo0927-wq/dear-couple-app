@@ -323,6 +323,7 @@ class _NotificationSettingsPageState
         const _SectionLabel('받을 알림'),
         const SizedBox(height: 10),
         _SettingsSection(
+          key: const Key('notification-receive-section'),
           children: [
             _PreferenceSwitchRow(
               icon: Icons.chat_bubble_outline_rounded,
@@ -376,6 +377,7 @@ class _NotificationSettingsPageState
         const _SectionLabel('시간'),
         const SizedBox(height: 10),
         _SettingsSection(
+          key: const Key('notification-time-section'),
           children: [
             _TimeSelectorRow(
               icon: Icons.celebration_outlined,
@@ -503,7 +505,7 @@ class _SystemStatusCard extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: foreground.withValues(alpha: 0.86),
+                color: foreground,
                 height: 1.35,
               ),
         ),
@@ -608,7 +610,7 @@ class _ConnectionStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.72),
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: scheme.outlineVariant),
       ),
@@ -653,7 +655,7 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({required this.children});
+  const _SettingsSection({required this.children, super.key});
 
   final List<Widget> children;
 
@@ -663,7 +665,7 @@ class _SettingsSection extends StatelessWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.96),
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: scheme.outlineVariant),
       ),
@@ -909,7 +911,7 @@ class _NotificationSettingsSkeleton extends StatelessWidget {
       itemBuilder: (_, index) => Container(
         height: index == 0 ? 92 : 68,
         decoration: BoxDecoration(
-          color: scheme.surface.withValues(alpha: 0.72),
+          color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: scheme.outlineVariant),
         ),
