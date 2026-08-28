@@ -829,10 +829,11 @@ class DearBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: DearColors.backgroundTop.withValues(alpha: 0.98),
-        border: const Border(top: BorderSide(color: DearColors.line)),
+        color: scheme.surfaceContainerLowest.withValues(alpha: 0.98),
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
       child: SafeArea(
         top: false,
@@ -842,8 +843,8 @@ class DearBottomNav extends StatelessWidget {
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.transparent,
           elevation: 0,
-          selectedItemColor: DearColors.coralText,
-          unselectedItemColor: DearColors.secondary,
+          selectedItemColor: scheme.primary,
+          unselectedItemColor: scheme.onSurfaceVariant,
           selectedLabelStyle: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
@@ -886,6 +887,7 @@ class DearLogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     return SizedBox(
       width: size,
       height: size,
@@ -894,6 +896,8 @@ class DearLogoMark extends StatelessWidget {
         child: Image.asset(
           'assets/icons/dear_app_icon_1024.png',
           fit: BoxFit.cover,
+          cacheWidth: math.max(1, (size * pixelRatio).round()),
+          cacheHeight: math.max(1, (size * pixelRatio).round()),
           errorBuilder: (_, __, ___) => _PaintedLogo(size: size),
         ),
       ),
@@ -983,6 +987,7 @@ class DearAvatarPair extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: size * 2.45,
       height: size * 1.28,
@@ -991,8 +996,11 @@ class DearAvatarPair extends StatelessWidget {
         children: [
           Positioned(
               left: 0, child: _DearAvatar(imageUrl: leftImageUrl, size: size)),
-          Icon(Icons.favorite_rounded,
-              color: DearColors.coral, size: math.max(24, size * 0.42)),
+          Icon(
+            Icons.favorite_rounded,
+            color: scheme.primary,
+            size: math.max(24, size * 0.42),
+          ),
           Positioned(
               right: 0,
               child: _DearAvatar(imageUrl: rightImageUrl, size: size)),
@@ -1011,30 +1019,47 @@ class _DearAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl?.trim();
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: size,
       height: size,
       padding: const EdgeInsets.all(4),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: scheme.surface,
         shape: BoxShape.circle,
       ),
       child: ClipOval(
         child: url == null || url.isEmpty
             ? DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFFFFF4F6), Color(0xFFFFD5DF)],
+                    colors: [
+                      scheme.surfaceContainerLow,
+                      scheme.primaryContainer,
+                    ],
                   ),
                 ),
-                child: Icon(Icons.person_rounded,
-                    color: DearColors.coral, size: size * 0.52),
+                child: Icon(
+                  Icons.person_rounded,
+                  color: scheme.onPrimaryContainer,
+                  size: size * 0.52,
+                ),
               )
             : Image.network(
                 url,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    const Icon(Icons.person_rounded, color: DearColors.coral),
+                cacheWidth: math.max(
+                  1,
+                  (size * MediaQuery.devicePixelRatioOf(context)).round(),
+                ),
+                cacheHeight: math.max(
+                  1,
+                  (size * MediaQuery.devicePixelRatioOf(context)).round(),
+                ),
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.person_rounded,
+                  color: scheme.onPrimaryContainer,
+                ),
               ),
       ),
     );
