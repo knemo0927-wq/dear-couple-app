@@ -24,6 +24,13 @@ final memoryAlbumFeedProvider = StateNotifierProvider.autoDispose
   );
 });
 
+enum MemoryAlbumFeedFailureKind {
+  initial,
+  refresh,
+  loadMore,
+  realtime,
+}
+
 class MemoryAlbumFeedState {
   const MemoryAlbumFeedState({
     this.items = const [],
@@ -31,7 +38,10 @@ class MemoryAlbumFeedState {
     this.hasMore = true,
     this.isLoadingInitial = true,
     this.isLoadingMore = false,
+    this.hasLoadedOnce = false,
+    this.isRefreshing = false,
     this.error,
+    this.failureKind,
   });
 
   final List<MemoryAlbum> items;
@@ -39,7 +49,10 @@ class MemoryAlbumFeedState {
   final bool hasMore;
   final bool isLoadingInitial;
   final bool isLoadingMore;
+  final bool hasLoadedOnce;
+  final bool isRefreshing;
   final Object? error;
+  final MemoryAlbumFeedFailureKind? failureKind;
 }
 
 class MemoryAlbumFeedController extends StateNotifier<MemoryAlbumFeedState> {
@@ -63,22 +76,30 @@ class MemoryAlbumFeedController extends StateNotifier<MemoryAlbumFeedState> {
 
   Future<void> refresh() async {
     final generation = ++_requestGeneration;
+    final wasLoaded = state.hasLoadedOnce;
     state = MemoryAlbumFeedState(
       items: state.items,
-      isLoadingInitial: state.items.isEmpty,
+      nextCursor: state.nextCursor,
+      hasMore: state.hasMore,
+      isLoadingInitial: !wasLoaded,
+      isLoadingMore: false,
+      hasLoadedOnce: wasLoaded,
+      isRefreshing: wasLoaded,
     );
     try {
       final page = await _repository.fetchAlbumPage(coupleId: _coupleId);
       if (!mounted || generation != _requestGeneration) return;
       final latestHead = _latestHead;
+      final fetched = mergeMemoryAlbums(const [], page.items);
       final items = latestHead == null
-          ? page.items
-          : mergeMemoryAlbums(page.items, latestHead.items);
+          ? fetched
+          : mergeMemoryAlbums(fetched, latestHead.items);
       state = MemoryAlbumFeedState(
         items: items,
         nextCursor: page.nextCursor,
         hasMore: latestHead?.isExhaustive == true ? false : page.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: true,
       );
     } catch (error) {
       if (!mounted || generation != _requestGeneration) return;
@@ -87,13 +108,22 @@ class MemoryAlbumFeedController extends StateNotifier<MemoryAlbumFeedState> {
         nextCursor: state.nextCursor,
         hasMore: state.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: state.hasLoadedOnce,
         error: error,
+        failureKind: wasLoaded
+            ? MemoryAlbumFeedFailureKind.refresh
+            : MemoryAlbumFeedFailureKind.initial,
       );
     }
   }
 
   Future<void> loadMore() async {
-    if (state.isLoadingInitial || state.isLoadingMore || !state.hasMore) return;
+    if (state.isLoadingInitial ||
+        state.isRefreshing ||
+        state.isLoadingMore ||
+        !state.hasMore) {
+      return;
+    }
     final cursor = state.nextCursor;
     if (cursor == null) return;
     final generation = _requestGeneration;
@@ -103,6 +133,7 @@ class MemoryAlbumFeedController extends StateNotifier<MemoryAlbumFeedState> {
       hasMore: state.hasMore,
       isLoadingInitial: false,
       isLoadingMore: true,
+      hasLoadedOnce: state.hasLoadedOnce,
     );
     try {
       final page = await _repository.fetchAlbumPage(
@@ -115,6 +146,7 @@ class MemoryAlbumFeedController extends StateNotifier<MemoryAlbumFeedState> {
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: true,
       );
     } catch (error) {
       if (!mounted || generation != _requestGeneration) return;
@@ -123,8 +155,25 @@ class MemoryAlbumFeedController extends StateNotifier<MemoryAlbumFeedState> {
         nextCursor: state.nextCursor,
         hasMore: state.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: state.hasLoadedOnce,
         error: error,
+        failureKind: MemoryAlbumFeedFailureKind.loadMore,
       );
+    }
+  }
+
+  /// Replays the operation that failed. A load-more retry keeps using the
+  /// preserved cursor instead of replacing the feed with a head refresh.
+  Future<void> retry() {
+    switch (state.failureKind) {
+      case MemoryAlbumFeedFailureKind.loadMore:
+        return loadMore();
+      case MemoryAlbumFeedFailureKind.initial:
+      case MemoryAlbumFeedFailureKind.refresh:
+      case MemoryAlbumFeedFailureKind.realtime:
+        return refresh();
+      case null:
+        return Future<void>.value();
     }
   }
 
@@ -132,22 +181,33 @@ class MemoryAlbumFeedController extends StateNotifier<MemoryAlbumFeedState> {
     if (!mounted) return;
     _latestHead = snapshot;
     final items = reconcileMemoryAlbumHeadWindow(state.items, snapshot);
+    final clearsRealtimeFailure =
+        state.failureKind == MemoryAlbumFeedFailureKind.realtime;
     state = MemoryAlbumFeedState(
       items: items,
       nextCursor: snapshot.isExhaustive ? null : state.nextCursor,
       hasMore: snapshot.isExhaustive ? false : state.hasMore,
       isLoadingInitial: state.isLoadingInitial,
       isLoadingMore: state.isLoadingMore,
-      error: state.error,
+      hasLoadedOnce: state.hasLoadedOnce,
+      isRefreshing: state.isRefreshing,
+      error: clearsRealtimeFailure ? null : state.error,
+      failureKind: clearsRealtimeFailure ? null : state.failureKind,
     );
   }
 
   void _handleHeadError(Object error, StackTrace stackTrace) {
-    if (!mounted || state.items.isNotEmpty) return;
+    if (!mounted || state.error != null) return;
     state = MemoryAlbumFeedState(
+      items: state.items,
+      nextCursor: state.nextCursor,
       hasMore: state.hasMore,
-      isLoadingInitial: false,
+      isLoadingInitial: state.isLoadingInitial,
+      isLoadingMore: state.isLoadingMore,
+      hasLoadedOnce: state.hasLoadedOnce,
+      isRefreshing: state.isRefreshing,
       error: error,
+      failureKind: MemoryAlbumFeedFailureKind.realtime,
     );
   }
 
@@ -232,7 +292,10 @@ class MemoryAlbumPhotoFeedState {
     this.hasMore = true,
     this.isLoadingInitial = true,
     this.isLoadingMore = false,
+    this.hasLoadedOnce = false,
+    this.isRefreshing = false,
     this.error,
+    this.failureKind,
   });
 
   final List<MemoryAlbumPhoto> items;
@@ -240,7 +303,10 @@ class MemoryAlbumPhotoFeedState {
   final bool hasMore;
   final bool isLoadingInitial;
   final bool isLoadingMore;
+  final bool hasLoadedOnce;
+  final bool isRefreshing;
   final Object? error;
+  final MemoryAlbumFeedFailureKind? failureKind;
 }
 
 class MemoryAlbumPhotoFeedController
@@ -280,9 +346,15 @@ class MemoryAlbumPhotoFeedController
 
   Future<void> refresh() async {
     final generation = ++_requestGeneration;
+    final wasLoaded = state.hasLoadedOnce;
     state = MemoryAlbumPhotoFeedState(
       items: state.items,
-      isLoadingInitial: state.items.isEmpty,
+      nextCursor: state.nextCursor,
+      hasMore: state.hasMore,
+      isLoadingInitial: !wasLoaded,
+      isLoadingMore: false,
+      hasLoadedOnce: wasLoaded,
+      isRefreshing: wasLoaded,
     );
     try {
       final page = await _repository.fetchPhotoPage(
@@ -294,7 +366,9 @@ class MemoryAlbumPhotoFeedController
         excludedUploader: _args.excludedUploader,
       );
       if (!mounted || generation != _requestGeneration) return;
-      final fetched = _withoutDeleted(page.items);
+      final fetched = _withoutDeleted(
+        mergeMemoryAlbumPhotos(const [], page.items),
+      );
       final latestHead = _latestRealtimeHead;
       final refreshed = latestHead == null
           ? fetched
@@ -306,20 +380,31 @@ class MemoryAlbumPhotoFeedController
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: true,
       );
     } catch (error) {
       if (!mounted || generation != _requestGeneration) return;
       state = MemoryAlbumPhotoFeedState(
         items: state.items,
+        nextCursor: state.nextCursor,
         hasMore: state.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: state.hasLoadedOnce,
         error: error,
+        failureKind: wasLoaded
+            ? MemoryAlbumFeedFailureKind.refresh
+            : MemoryAlbumFeedFailureKind.initial,
       );
     }
   }
 
   Future<void> loadMore() async {
-    if (state.isLoadingInitial || state.isLoadingMore || !state.hasMore) return;
+    if (state.isLoadingInitial ||
+        state.isRefreshing ||
+        state.isLoadingMore ||
+        !state.hasMore) {
+      return;
+    }
     final cursor = state.nextCursor;
     if (cursor == null) return;
 
@@ -330,6 +415,7 @@ class MemoryAlbumPhotoFeedController
       hasMore: state.hasMore,
       isLoadingInitial: false,
       isLoadingMore: true,
+      hasLoadedOnce: state.hasLoadedOnce,
     );
     try {
       final page = await _repository.fetchPhotoPage(
@@ -349,6 +435,7 @@ class MemoryAlbumPhotoFeedController
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: true,
       );
     } catch (error) {
       if (!mounted || generation != _requestGeneration) return;
@@ -357,8 +444,25 @@ class MemoryAlbumPhotoFeedController
         nextCursor: state.nextCursor,
         hasMore: state.hasMore,
         isLoadingInitial: false,
+        hasLoadedOnce: state.hasLoadedOnce,
         error: error,
+        failureKind: MemoryAlbumFeedFailureKind.loadMore,
       );
+    }
+  }
+
+  /// Replays the operation that failed. A load-more retry keeps using the
+  /// preserved cursor instead of replacing the feed with a head refresh.
+  Future<void> retry() {
+    switch (state.failureKind) {
+      case MemoryAlbumFeedFailureKind.loadMore:
+        return loadMore();
+      case MemoryAlbumFeedFailureKind.initial:
+      case MemoryAlbumFeedFailureKind.refresh:
+      case MemoryAlbumFeedFailureKind.realtime:
+        return refresh();
+      case null:
+        return Future<void>.value();
     }
   }
 
@@ -369,13 +473,18 @@ class MemoryAlbumPhotoFeedController
       state.items,
       snapshot,
     );
+    final clearsRealtimeFailure =
+        state.failureKind == MemoryAlbumFeedFailureKind.realtime;
     state = MemoryAlbumPhotoFeedState(
       items: _withoutDeleted(reconciled),
       nextCursor: state.nextCursor,
       hasMore: state.hasMore,
       isLoadingInitial: state.isLoadingInitial,
       isLoadingMore: state.isLoadingMore,
-      error: state.error,
+      hasLoadedOnce: state.hasLoadedOnce,
+      isRefreshing: state.isRefreshing,
+      error: clearsRealtimeFailure ? null : state.error,
+      failureKind: clearsRealtimeFailure ? null : state.failureKind,
     );
   }
 
@@ -393,31 +502,49 @@ class MemoryAlbumPhotoFeedController
       hasMore: state.hasMore,
       isLoadingInitial: state.isLoadingInitial,
       isLoadingMore: state.isLoadingMore,
+      hasLoadedOnce: state.hasLoadedOnce,
+      isRefreshing: state.isRefreshing,
       error: state.error,
+      failureKind: state.failureKind,
     );
   }
 
   List<MemoryAlbumPhoto> _withoutDeleted(
     Iterable<MemoryAlbumPhoto> photos,
   ) {
-    return removeMemoryAlbumPhotosById(photos, _deletedPhotoIds);
+    return removeMemoryAlbumPhotosById(
+      mergeMemoryAlbumPhotos(const [], photos),
+      _deletedPhotoIds,
+    );
   }
 
   void _handleRealtimeError(Object error, StackTrace stackTrace) {
-    if (!mounted || state.items.isNotEmpty) return;
+    if (!mounted || state.error != null) return;
     state = MemoryAlbumPhotoFeedState(
+      items: state.items,
+      nextCursor: state.nextCursor,
       hasMore: state.hasMore,
-      isLoadingInitial: false,
+      isLoadingInitial: state.isLoadingInitial,
+      isLoadingMore: state.isLoadingMore,
+      hasLoadedOnce: state.hasLoadedOnce,
+      isRefreshing: state.isRefreshing,
       error: error,
+      failureKind: MemoryAlbumFeedFailureKind.realtime,
     );
   }
 
   void _handleDeletionError(Object error, StackTrace stackTrace) {
-    if (!mounted || state.items.isNotEmpty || state.error != null) return;
+    if (!mounted || state.error != null) return;
     state = MemoryAlbumPhotoFeedState(
+      items: state.items,
+      nextCursor: state.nextCursor,
       hasMore: state.hasMore,
-      isLoadingInitial: false,
+      isLoadingInitial: state.isLoadingInitial,
+      isLoadingMore: state.isLoadingMore,
+      hasLoadedOnce: state.hasLoadedOnce,
+      isRefreshing: state.isRefreshing,
       error: error,
+      failureKind: MemoryAlbumFeedFailureKind.realtime,
     );
   }
 
@@ -589,9 +716,11 @@ List<MemoryAlbum> reconcileMemoryAlbumHeadWindow(
   Iterable<MemoryAlbum> current,
   MemoryAlbumHeadSnapshot snapshot,
 ) {
-  if (snapshot.isExhaustive) return snapshot.items;
+  if (snapshot.isExhaustive) {
+    return mergeMemoryAlbums(const [], snapshot.items);
+  }
   final boundary = snapshot.oldest;
-  if (boundary == null) return snapshot.items;
+  if (boundary == null) return mergeMemoryAlbums(const [], snapshot.items);
   final older = current.where(
     (album) => compareMemoryAlbumsNewestFirst(album, boundary) > 0,
   );
@@ -621,9 +750,13 @@ List<MemoryAlbumPhoto> reconcileMemoryAlbumPhotoHeadWindow(
   Iterable<MemoryAlbumPhoto> current,
   MemoryAlbumPhotoHeadSnapshot snapshot,
 ) {
-  if (snapshot.isExhaustive) return snapshot.items;
+  if (snapshot.isExhaustive) {
+    return mergeMemoryAlbumPhotos(const [], snapshot.items);
+  }
   final boundary = snapshot.oldestUnfiltered;
-  if (boundary == null) return snapshot.items;
+  if (boundary == null) {
+    return mergeMemoryAlbumPhotos(const [], snapshot.items);
+  }
   final older = current.where(
     (photo) => compareMemoryAlbumPhotosNewestFirst(photo, boundary) > 0,
   );

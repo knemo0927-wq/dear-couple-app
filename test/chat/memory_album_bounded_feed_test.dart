@@ -124,11 +124,195 @@ void main() {
     expect(repository.albumPageCalls, 2);
   });
 
+  test('album refresh는 기존 page를 보존하고 실패 종류를 refresh로 기록한다', () async {
+    final current = album(id: 'current', updatedAt: DateTime.utc(2026, 7, 12));
+    final pageCursor = MemoryAlbumCursor(
+      isFeatured: current.isFeatured,
+      updatedAt: current.updatedAt,
+      id: current.id,
+    );
+    final refreshCompleter = Completer<MemoryAlbumListPage>();
+    var callCount = 0;
+    final repository = _FeedRepository(
+      fetchAlbumPage: ({cursor}) {
+        callCount++;
+        if (callCount == 1) {
+          return Future.value(
+            MemoryAlbumListPage(
+              items: [current, current],
+              nextCursor: pageCursor,
+              hasMore: true,
+            ),
+          );
+        }
+        return refreshCompleter.future;
+      },
+    );
+    final controller = MemoryAlbumFeedController(
+      repository: repository,
+      coupleId: 'couple-1',
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+
+    await _flushAsyncWork();
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasLoadedOnce, isTrue);
+
+    final refresh = controller.refresh();
+    await _flushAsyncWork();
+    expect(controller.state.isRefreshing, isTrue);
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasMore, isTrue);
+
+    await controller.loadMore();
+    expect(repository.albumPageCalls, 2);
+
+    refreshCompleter.completeError(StateError('refresh failed'));
+    await refresh;
+
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasMore, isTrue);
+    expect(controller.state.hasLoadedOnce, isTrue);
+    expect(controller.state.isRefreshing, isFalse);
+    expect(
+      controller.state.failureKind,
+      MemoryAlbumFeedFailureKind.refresh,
+    );
+  });
+
+  test('album feed는 성공한 빈 응답도 최초 load 완료로 기록한다', () async {
+    final repository = _FeedRepository();
+    final controller = MemoryAlbumFeedController(
+      repository: repository,
+      coupleId: 'couple-1',
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+
+    await _flushAsyncWork();
+
+    expect(controller.state.items, isEmpty);
+    expect(controller.state.hasLoadedOnce, isTrue);
+    expect(controller.state.isLoadingInitial, isFalse);
+    expect(controller.state.isRefreshing, isFalse);
+    expect(controller.state.hasMore, isFalse);
+    expect(controller.state.error, isNull);
+    expect(controller.state.failureKind, isNull);
+  });
+
+  test('album loadMore 실패 retry는 refresh 대신 보존한 cursor를 재사용한다', () async {
+    final newest = album(id: 'newest', updatedAt: DateTime.utc(2026, 7, 12));
+    final older = album(id: 'older', updatedAt: DateTime.utc(2026, 7, 11));
+    final pageCursor = MemoryAlbumCursor(
+      isFeatured: newest.isFeatured,
+      updatedAt: newest.updatedAt,
+      id: newest.id,
+    );
+    final requestedCursors = <MemoryAlbumCursor?>[];
+    var loadMoreAttempts = 0;
+    final repository = _FeedRepository(
+      fetchAlbumPage: ({cursor}) async {
+        requestedCursors.add(cursor);
+        if (cursor == null) {
+          return MemoryAlbumListPage(
+            items: [newest, newest],
+            nextCursor: pageCursor,
+            hasMore: true,
+          );
+        }
+        loadMoreAttempts++;
+        if (loadMoreAttempts == 1) {
+          throw StateError('load more failed');
+        }
+        return MemoryAlbumListPage(
+          items: [newest, older, older],
+          nextCursor: null,
+          hasMore: false,
+        );
+      },
+    );
+    final controller = MemoryAlbumFeedController(
+      repository: repository,
+      coupleId: 'couple-1',
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+    await _flushAsyncWork();
+
+    await controller.loadMore();
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasMore, isTrue);
+    expect(
+      controller.state.failureKind,
+      MemoryAlbumFeedFailureKind.loadMore,
+    );
+
+    await controller.retry();
+
+    expect(requestedCursors, [null, pageCursor, pageCursor]);
+    expect(controller.state.items.map((item) => item.id), ['newest', 'older']);
+    expect(controller.state.hasMore, isFalse);
+    expect(controller.state.error, isNull);
+    expect(controller.state.failureKind, isNull);
+  });
+
+  test('album realtime 실패는 기존 항목을 보존하고 다음 snapshot에서 해제한다', () async {
+    final current = album(id: 'current', updatedAt: DateTime.utc(2026, 7, 12));
+    final repository = _FeedRepository(
+      fetchAlbumPage: ({cursor}) async => MemoryAlbumListPage(
+        items: [current],
+        nextCursor: null,
+        hasMore: false,
+      ),
+    );
+    final controller = MemoryAlbumFeedController(
+      repository: repository,
+      coupleId: 'couple-1',
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+    await _flushAsyncWork();
+
+    repository.albumHead.addError(StateError('realtime failed'));
+    await _flushAsyncWork();
+
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(
+      controller.state.failureKind,
+      MemoryAlbumFeedFailureKind.realtime,
+    );
+
+    repository.albumHead.add(
+      MemoryAlbumHeadSnapshot(
+        items: [current, current],
+        oldest: current,
+        isExhaustive: true,
+      ),
+    );
+    await _flushAsyncWork();
+
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.error, isNull);
+    expect(controller.state.failureKind, isNull);
+  });
+
   test('필터 cursor의 과거 사진도 외부 deletion event 즉시 제거한다', () async {
     final recent = photo(id: 'recent', createdAt: DateTime.utc(2026, 7, 12));
     final older = photo(id: 'older', createdAt: DateTime.utc(2026, 6, 1));
     final repository = _FeedRepository(
-      fetchPhotoPage: () async => MemoryAlbumPhotoPage(
+      fetchPhotoPage: ({cursor}) async => MemoryAlbumPhotoPage(
         items: [recent, older],
         nextCursor: MemoryAlbumPhotoCursor(
           createdAt: older.createdAt,
@@ -162,7 +346,7 @@ void main() {
     final stale = photo(id: 'stale', createdAt: DateTime.utc(2026, 6, 1));
     final fetchCompleter = Completer<MemoryAlbumPhotoPage>();
     final repository = _FeedRepository(
-      fetchPhotoPage: () => fetchCompleter.future,
+      fetchPhotoPage: ({cursor}) => fetchCompleter.future,
     );
     final controller = MemoryAlbumPhotoFeedController(
       repository: repository,
@@ -194,6 +378,200 @@ void main() {
     expect(controller.state.items, isEmpty);
   });
 
+  test('photo refresh는 기존 page를 보존하고 실패 종류를 refresh로 기록한다', () async {
+    final current = photo(id: 'current', createdAt: DateTime.utc(2026, 7, 12));
+    final pageCursor = MemoryAlbumPhotoCursor(
+      createdAt: current.createdAt,
+      id: current.id,
+    );
+    final refreshCompleter = Completer<MemoryAlbumPhotoPage>();
+    var callCount = 0;
+    final repository = _FeedRepository(
+      fetchPhotoPage: ({cursor}) {
+        callCount++;
+        if (callCount == 1) {
+          return Future.value(
+            MemoryAlbumPhotoPage(
+              items: [current, current],
+              nextCursor: pageCursor,
+              hasMore: true,
+            ),
+          );
+        }
+        return refreshCompleter.future;
+      },
+    );
+    final controller = MemoryAlbumPhotoFeedController(
+      repository: repository,
+      args: const MemoryAlbumPhotoFeedArgs(
+        coupleId: 'couple-1',
+        albumId: 'album-1',
+      ),
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+
+    await _flushAsyncWork();
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasLoadedOnce, isTrue);
+
+    final refresh = controller.refresh();
+    await _flushAsyncWork();
+    expect(controller.state.isRefreshing, isTrue);
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasMore, isTrue);
+
+    await controller.loadMore();
+    expect(repository.photoPageCalls, 2);
+
+    refreshCompleter.completeError(StateError('refresh failed'));
+    await refresh;
+
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasMore, isTrue);
+    expect(controller.state.hasLoadedOnce, isTrue);
+    expect(controller.state.isRefreshing, isFalse);
+    expect(
+      controller.state.failureKind,
+      MemoryAlbumFeedFailureKind.refresh,
+    );
+  });
+
+  test('photo feed는 성공한 빈 응답도 최초 load 완료로 기록한다', () async {
+    final repository = _FeedRepository();
+    final controller = MemoryAlbumPhotoFeedController(
+      repository: repository,
+      args: const MemoryAlbumPhotoFeedArgs(
+        coupleId: 'couple-1',
+        albumId: 'album-1',
+      ),
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+
+    await _flushAsyncWork();
+
+    expect(controller.state.items, isEmpty);
+    expect(controller.state.hasLoadedOnce, isTrue);
+    expect(controller.state.isLoadingInitial, isFalse);
+    expect(controller.state.isRefreshing, isFalse);
+    expect(controller.state.hasMore, isFalse);
+    expect(controller.state.error, isNull);
+    expect(controller.state.failureKind, isNull);
+  });
+
+  test('photo loadMore 실패 retry는 refresh 대신 보존한 cursor를 재사용한다', () async {
+    final newest = photo(id: 'newest', createdAt: DateTime.utc(2026, 7, 12));
+    final older = photo(id: 'older', createdAt: DateTime.utc(2026, 7, 11));
+    final pageCursor = MemoryAlbumPhotoCursor(
+      createdAt: newest.createdAt,
+      id: newest.id,
+    );
+    final requestedCursors = <MemoryAlbumPhotoCursor?>[];
+    var loadMoreAttempts = 0;
+    final repository = _FeedRepository(
+      fetchPhotoPage: ({cursor}) async {
+        requestedCursors.add(cursor);
+        if (cursor == null) {
+          return MemoryAlbumPhotoPage(
+            items: [newest, newest],
+            nextCursor: pageCursor,
+            hasMore: true,
+          );
+        }
+        loadMoreAttempts++;
+        if (loadMoreAttempts == 1) {
+          throw StateError('load more failed');
+        }
+        return MemoryAlbumPhotoPage(
+          items: [newest, older, older],
+          nextCursor: null,
+          hasMore: false,
+        );
+      },
+    );
+    final controller = MemoryAlbumPhotoFeedController(
+      repository: repository,
+      args: const MemoryAlbumPhotoFeedArgs(
+        coupleId: 'couple-1',
+        albumId: 'album-1',
+      ),
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+    await _flushAsyncWork();
+
+    await controller.loadMore();
+    expect(controller.state.nextCursor, pageCursor);
+    expect(controller.state.hasMore, isTrue);
+    expect(
+      controller.state.failureKind,
+      MemoryAlbumFeedFailureKind.loadMore,
+    );
+
+    await controller.retry();
+
+    expect(requestedCursors, [null, pageCursor, pageCursor]);
+    expect(controller.state.items.map((item) => item.id), ['newest', 'older']);
+    expect(controller.state.hasMore, isFalse);
+    expect(controller.state.error, isNull);
+    expect(controller.state.failureKind, isNull);
+  });
+
+  test('photo realtime 실패는 기존 항목을 보존하고 다음 snapshot에서 해제한다', () async {
+    final current = photo(id: 'current', createdAt: DateTime.utc(2026, 7, 12));
+    final repository = _FeedRepository(
+      fetchPhotoPage: ({cursor}) async => MemoryAlbumPhotoPage(
+        items: [current],
+        nextCursor: null,
+        hasMore: false,
+      ),
+    );
+    final controller = MemoryAlbumPhotoFeedController(
+      repository: repository,
+      args: const MemoryAlbumPhotoFeedArgs(
+        coupleId: 'couple-1',
+        albumId: 'album-1',
+      ),
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+    await _flushAsyncWork();
+
+    repository.photoHead.addError(StateError('realtime failed'));
+    await _flushAsyncWork();
+
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(
+      controller.state.failureKind,
+      MemoryAlbumFeedFailureKind.realtime,
+    );
+
+    repository.photoHead.add(
+      MemoryAlbumPhotoHeadSnapshot(
+        items: [current, current],
+        oldestUnfiltered: current,
+        isExhaustive: true,
+      ),
+    );
+    await _flushAsyncWork();
+
+    expect(controller.state.items.map((item) => item.id), ['current']);
+    expect(controller.state.error, isNull);
+    expect(controller.state.failureKind, isNull);
+  });
+
   test('011 migration은 aggregate RPC와 couple-scoped deletion outbox를 정의한다', () {
     final sql = File(
       'supabase/migrations/'
@@ -221,7 +599,9 @@ typedef _FetchAlbumPage = Future<MemoryAlbumListPage> Function({
   MemoryAlbumCursor? cursor,
 });
 
-typedef _FetchPhotoPage = Future<MemoryAlbumPhotoPage> Function();
+typedef _FetchPhotoPage = Future<MemoryAlbumPhotoPage> Function({
+  MemoryAlbumPhotoCursor? cursor,
+});
 
 class _FeedRepository extends MemoryAlbumRepository {
   _FeedRepository({
@@ -246,6 +626,7 @@ class _FeedRepository extends MemoryAlbumRepository {
   final StreamController<List<MemoryAlbumPhotoDeletion>> deletionEvents =
       StreamController<List<MemoryAlbumPhotoDeletion>>.broadcast();
   int albumPageCalls = 0;
+  int photoPageCalls = 0;
 
   @override
   Stream<MemoryAlbumHeadSnapshot> watchAlbumHead({
@@ -308,6 +689,7 @@ class _FeedRepository extends MemoryAlbumRepository {
     String? uploadedBy,
     String? excludedUploader,
   }) {
+    photoPageCalls++;
     final callback = _fetchPhotoPage;
     if (callback == null) {
       return Future.value(
@@ -318,7 +700,7 @@ class _FeedRepository extends MemoryAlbumRepository {
         ),
       );
     }
-    return callback();
+    return callback(cursor: cursor);
   }
 
   Future<void> close() async {
