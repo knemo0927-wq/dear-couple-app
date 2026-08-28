@@ -18,6 +18,7 @@ import 'package:couple_chat_app/src/features/onboarding/presentation/onboarding_
 import 'package:couple_chat_app/src/features/settings/presentation/notification_settings_page.dart';
 import 'package:couple_chat_app/src/features/settings/presentation/profile_settings_page.dart';
 import 'package:couple_chat_app/src/routing/route_guard.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -76,14 +77,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/reset-password',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const PasswordRecoveryPage(),
         ),
       ),
       GoRoute(
         path: '/onboarding',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const OnboardingPage(),
         ),
@@ -133,28 +136,32 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile/edit',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const ProfileEditPage(),
         ),
       ),
       GoRoute(
         path: '/notifications',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const NotificationSettingsPage(),
         ),
       ),
       GoRoute(
         path: '/notification-inbox',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const NotificationInboxPage(),
         ),
       ),
       GoRoute(
         path: '/anniversary-reminders',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: AnniversaryReminderPage(
             initialEntryId: state.uri.queryParameters['item'],
@@ -163,28 +170,32 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/anniversary-reminders/all',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const AnniversaryFullListPage(),
         ),
       ),
       GoRoute(
         path: '/mini-games',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const MiniGamesPage(),
         ),
       ),
       GoRoute(
         path: '/travel-map',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const TravelMapPage(),
         ),
       ),
       GoRoute(
         path: '/travel-map/city/:cityId',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: TravelCityDetailPage(
               cityId: state.pathParameters['cityId'] ?? ''),
@@ -192,14 +203,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/world-map',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: const WorldMapPage(),
         ),
       ),
       GoRoute(
         path: '/world-map/country/:countryCode',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: WorldCountryDetailPage(
               countryCode: state.pathParameters['countryCode'] ?? ''),
@@ -207,7 +220,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/omok-wait/:inviteId',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: OmokInviteWaitPage(
             inviteId: state.pathParameters['inviteId'] ?? '',
@@ -217,7 +231,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/omok/invite/:inviteId',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child: OmokInviteAcceptPage(
               inviteId: state.pathParameters['inviteId'] ?? ''),
@@ -225,7 +240,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/omok/:sessionId',
-        pageBuilder: (context, state) => _buildFadeSlidePage(
+        pageBuilder: (context, state) => buildDearAdaptivePage(
+          context: context,
           key: state.pageKey,
           child:
               OmokGamePage(sessionId: state.pathParameters['sessionId'] ?? ''),
@@ -247,29 +263,22 @@ final goRouterProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
-CustomTransitionPage<void> _buildFadeSlidePage({
+Page<void> buildDearAdaptivePage({
+  required BuildContext context,
   required LocalKey key,
   required Widget child,
 }) {
-  return CustomTransitionPage<void>(
+  if (MediaQuery.disableAnimationsOf(context)) {
+    return NoTransitionPage<void>(key: key, child: child);
+  }
+
+  final platform = Theme.of(context).platform;
+  if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
+    return CupertinoPage<void>(key: key, child: child);
+  }
+  return MaterialPage<void>(
     key: key,
     child: child,
-    transitionDuration: const Duration(milliseconds: 260),
-    reverseTransitionDuration: const Duration(milliseconds: 220),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved =
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0.03, 0),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        ),
-      );
-    },
   );
 }
 
