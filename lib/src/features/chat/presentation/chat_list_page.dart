@@ -215,6 +215,7 @@ class _HomeLoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SafeArea(
       top: false,
       child: ListView(
@@ -223,25 +224,26 @@ class _HomeLoadingSkeleton extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: _skeleton(height: 54)),
+              Expanded(child: _skeleton(scheme, height: 54)),
               const SizedBox(width: 28),
-              _skeleton(width: 116, height: 68, radius: 34),
+              _skeleton(scheme, width: 116, height: 68, radius: 34),
             ],
           ),
           const SizedBox(height: 18),
-          _skeleton(height: 168, radius: 28),
+          _skeleton(scheme, height: 168, radius: 28),
           const SizedBox(height: 14),
-          _skeleton(height: 90),
+          _skeleton(scheme, height: 90),
           const SizedBox(height: 18),
-          _skeleton(height: 88),
+          _skeleton(scheme, height: 88),
           const SizedBox(height: 22),
-          _skeleton(height: 168, radius: 14),
+          _skeleton(scheme, height: 168, radius: 14),
         ],
       ),
     );
   }
 
-  Widget _skeleton({
+  Widget _skeleton(
+    ColorScheme scheme, {
     double? width,
     required double height,
     double radius = DearRadii.medium,
@@ -250,9 +252,9 @@ class _HomeLoadingSkeleton extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: scheme.surface.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: scheme.outlineVariant),
       ),
     );
   }
@@ -265,23 +267,24 @@ class _HomeLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.cloud_off_rounded,
               size: 44,
-              color: DearColors.secondary,
+              color: scheme.onSurfaceVariant,
             ),
             const SizedBox(height: 12),
             Text(
               '홈을 불러오지 못했어요.\n연결을 확인하고 다시 시도해 주세요.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: DearColors.secondary,
+                    color: scheme.onSurfaceVariant,
                     height: 1.45,
                   ),
             ),
@@ -312,6 +315,7 @@ class _HomeGreeting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final scheme = Theme.of(context).colorScheme;
     if (largeText) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,15 +324,15 @@ class _HomeGreeting extends StatelessWidget {
             TextSpan(
               children: [
                 TextSpan(text: '안녕하세요, $displayName '),
-                const TextSpan(
+                TextSpan(
                   text: '♥',
-                  style: TextStyle(color: DearColors.coral),
+                  style: TextStyle(color: scheme.primary),
                 ),
               ],
             ),
             key: const ValueKey('home-greeting-title'),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: DearColors.ink,
+                  color: scheme.onSurface,
                   fontSize: 21,
                   fontWeight: FontWeight.w600,
                   height: 1.18,
@@ -343,7 +347,7 @@ class _HomeGreeting extends StatelessWidget {
                   '오늘도 좋은 하루 보내세요',
                   maxLines: 2,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DearColors.secondary,
+                        color: scheme.onSurfaceVariant,
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
                       ),
@@ -374,7 +378,7 @@ class _HomeGreeting extends StatelessWidget {
                       maxLines: largeText ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: DearColors.ink,
+                            color: scheme.onSurface,
                             fontSize: 21,
                             fontWeight: FontWeight.w600,
                             height: 1.18,
@@ -383,10 +387,10 @@ class _HomeGreeting extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 7),
-                  const Text(
+                  Text(
                     '♥',
                     style: TextStyle(
-                      color: DearColors.coral,
+                      color: scheme.primary,
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                     ),
@@ -397,7 +401,7 @@ class _HomeGreeting extends StatelessWidget {
               Text(
                 '오늘도 좋은 하루 보내세요',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: DearColors.secondary,
+                      color: scheme.onSurfaceVariant,
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
                     ),
@@ -429,6 +433,7 @@ class _HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return AppBar(
       title: const _DearHomeTitle(),
       centerTitle: false,
@@ -442,9 +447,10 @@ class _HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
               IconButton(
                 tooltip: '알림',
                 onPressed: onNotifications,
-                icon: const Icon(
+                icon: Icon(
                   Icons.notifications_none_rounded,
-                  color: DearColors.ink,
+                  key: const ValueKey('home-notifications-icon'),
+                  color: scheme.onSurface,
                   size: 28,
                 ),
               ),
@@ -459,15 +465,18 @@ class _HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: DearColors.coral,
+                      color: scheme.primary,
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white, width: 1.5),
+                      border: Border.all(
+                        color: scheme.surfaceContainerLowest,
+                        width: 1.5,
+                      ),
                     ),
                     child: Text(
                       unreadCount > 99 ? '99+' : '$unreadCount',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: scheme.onPrimary,
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
                         height: 1.1,
@@ -489,6 +498,7 @@ class _DearHomeTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -497,7 +507,7 @@ class _DearHomeTitle extends StatelessWidget {
         Text(
           'Dear',
           style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(
-                color: DearColors.coralText,
+                color: scheme.primary,
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
               ),
@@ -520,6 +530,7 @@ class _RelationshipHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final dday = !isPaired
         ? '연결 대기'
         : anniversaryDate == null
@@ -532,20 +543,20 @@ class _RelationshipHero extends StatelessWidget {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
 
     final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: DearColors.coralText,
+          color: scheme.primary,
           fontSize: 16,
           fontWeight: FontWeight.w700,
           height: 1.1,
         );
     final ddayStyle = Theme.of(context).textTheme.displayMedium?.copyWith(
-          color: DearColors.coralText,
+          color: scheme.primary,
           fontWeight: FontWeight.w800,
           fontSize: 44,
           letterSpacing: 0,
           height: 0.96,
         );
     final dateStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: DearColors.secondary,
+          color: scheme.onSurfaceVariant,
           fontSize: 14,
           fontWeight: FontWeight.w600,
           height: 1.2,
@@ -674,8 +685,12 @@ class _PrimaryChatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final scheme = Theme.of(context).colorScheme;
     return DearCard(
+      key: const ValueKey('primary-chat-card'),
       padding: EdgeInsets.zero,
+      color: scheme.surface,
+      borderColor: scheme.outlineVariant,
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(DearRadii.medium),
@@ -706,7 +721,7 @@ class _PrimaryChatCard extends StatelessWidget {
                                   .textTheme
                                   .titleLarge
                                   ?.copyWith(
-                                    color: DearColors.ink,
+                                    color: scheme.onSurface,
                                     fontSize: 18,
                                     fontWeight: FontWeight.w700,
                                     height: 1.15,
@@ -722,7 +737,7 @@ class _PrimaryChatCard extends StatelessWidget {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFFEDF2),
+                                color: scheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
@@ -732,7 +747,7 @@ class _PrimaryChatCard extends StatelessWidget {
                                     .textTheme
                                     .labelSmall
                                     ?.copyWith(
-                                      color: DearColors.coralText,
+                                      color: scheme.primary,
                                       fontWeight: FontWeight.w800,
                                       height: 1,
                                     ),
@@ -752,7 +767,7 @@ class _PrimaryChatCard extends StatelessWidget {
                             ? TextOverflow.visible
                             : TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DearColors.secondary,
+                              color: scheme.onSurfaceVariant,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                             ),
@@ -772,7 +787,7 @@ class _PrimaryChatCard extends StatelessWidget {
                                     .textTheme
                                     .bodySmall
                                     ?.copyWith(
-                                      color: DearColors.secondary,
+                                      color: scheme.onSurfaceVariant,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w400,
                                     ),
@@ -784,7 +799,7 @@ class _PrimaryChatCard extends StatelessWidget {
                                     .textTheme
                                     .labelSmall
                                     ?.copyWith(
-                                      color: DearColors.coralText,
+                                      color: scheme.primary,
                                       fontWeight: FontWeight.w800,
                                     ),
                               ),
@@ -805,7 +820,7 @@ class _PrimaryChatCard extends StatelessWidget {
                           latestTimeLabel!,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: DearColors.secondary,
+                                    color: scheme.onSurfaceVariant,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -817,8 +832,8 @@ class _PrimaryChatCard extends StatelessWidget {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
-                            color: DearColors.coral,
+                          decoration: BoxDecoration(
+                            color: scheme.primary,
                             shape: BoxShape.circle,
                           ),
                         )
@@ -828,11 +843,11 @@ class _PrimaryChatCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(width: 8),
-                const ExcludeSemantics(
+                ExcludeSemantics(
                   child: Icon(
                     Icons.chevron_right_rounded,
                     size: 24,
-                    color: DearColors.secondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -852,28 +867,35 @@ class _PartnerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = this.imageUrl?.trim();
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 56,
       height: 56,
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
+        // This is an intentional photo-frame ring, not a page surface.
         color: Colors.white,
         shape: BoxShape.circle,
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: ClipOval(
         child: imageUrl == null || imageUrl.isEmpty
-            ? const ColoredBox(
-                color: DearColors.coralSoft,
-                child: Icon(Icons.person_rounded, color: DearColors.coralText),
+            ? ColoredBox(
+                color: scheme.primaryContainer,
+                child: Icon(
+                  Icons.person_rounded,
+                  color: scheme.onPrimaryContainer,
+                ),
               )
             : Image.network(
                 imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const ColoredBox(
-                  color: DearColors.coralSoft,
-                  child:
-                      Icon(Icons.person_rounded, color: DearColors.coralText),
+                errorBuilder: (_, __, ___) => ColoredBox(
+                  color: scheme.primaryContainer,
+                  child: Icon(
+                    Icons.person_rounded,
+                    color: scheme.onPrimaryContainer,
+                  ),
                 ),
               ),
       ),
@@ -896,6 +918,7 @@ class _NextAnniversaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final today = DateUtils.dateOnly(DateTime.now());
     final daysUntil = upcoming == null
         ? null
@@ -921,7 +944,7 @@ class _NextAnniversaryCard extends StatelessWidget {
         Text(
           '다음 기념일',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: DearColors.ink,
+                color: scheme.onSurface,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -946,8 +969,8 @@ class _NextAnniversaryCard extends StatelessWidget {
                     Container(
                       width: 54,
                       height: 54,
-                      decoration: const BoxDecoration(
-                        color: DearColors.coralSoft,
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -970,7 +993,7 @@ class _NextAnniversaryCard extends StatelessWidget {
                                 .textTheme
                                 .titleSmall
                                 ?.copyWith(
-                                  color: DearColors.ink,
+                                  color: scheme.onSurface,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -981,16 +1004,16 @@ class _NextAnniversaryCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: DearColors.secondary,
+                                      color: scheme.onSurfaceVariant,
                                     ),
                           ),
                         ],
                       ),
                     ),
-                    const ExcludeSemantics(
+                    ExcludeSemantics(
                       child: Icon(
                         Icons.chevron_right_rounded,
-                        color: DearColors.secondary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1022,10 +1045,16 @@ class _HomeFeatureIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final decodeSize = (size * MediaQuery.devicePixelRatioOf(context))
+        .round()
+        .clamp(1, 512)
+        .toInt();
     return Image.asset(
       glyph.assetPath,
       width: size,
       height: size,
+      cacheWidth: decodeSize,
+      cacheHeight: decodeSize,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
     );
@@ -1039,6 +1068,7 @@ class _RecentMemoriesStrip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
     final coupleId = this.coupleId;
     final photosAsync = coupleId == null
         ? const AsyncValue<List<MemoryAlbumPhoto>>.data(<MemoryAlbumPhoto>[])
@@ -1047,7 +1077,7 @@ class _RecentMemoriesStrip extends ConsumerWidget {
     final sectionTitle = Text(
       '최근 추억',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: DearColors.ink,
+            color: scheme.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.w700,
           ),
@@ -1055,7 +1085,7 @@ class _RecentMemoriesStrip extends ConsumerWidget {
     final moreButton = TextButton(
       onPressed: coupleId == null ? null : () => context.go('/memory-album'),
       style: TextButton.styleFrom(
-        foregroundColor: DearColors.secondary,
+        foregroundColor: scheme.primary,
         minimumSize: const Size(44, 44),
         padding: const EdgeInsets.symmetric(horizontal: 8),
         textStyle: const TextStyle(
@@ -1148,6 +1178,7 @@ class _RecentMemoriesEmptyStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DearCard(
       padding: EdgeInsets.zero,
       shadowOpacity: 0.25,
@@ -1167,15 +1198,15 @@ class _RecentMemoriesEmptyStrip extends StatelessWidget {
                   child: Text(
                     '아직 담긴 추억이 없어요. 첫 사진을 추가해 보세요.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: DearColors.secondary,
+                          color: scheme.onSurfaceVariant,
                           fontWeight: FontWeight.w700,
                         ),
                   ),
                 ),
-                const ExcludeSemantics(
+                ExcludeSemantics(
                   child: Icon(
                     Icons.chevron_right_rounded,
-                    color: DearColors.secondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -1194,18 +1225,19 @@ class _RecentMemoriesError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DearCard(
       padding: const EdgeInsets.all(16),
       shadowOpacity: 0.2,
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_rounded, color: DearColors.secondary),
+          Icon(Icons.cloud_off_rounded, color: scheme.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               '최근 추억을 불러오지 못했어요.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: DearColors.secondary,
+                    color: scheme.onSurfaceVariant,
                   ),
             ),
           ),
@@ -1221,11 +1253,12 @@ class _MemorySkeletonTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.76),
+        color: scheme.surface.withValues(alpha: 0.76),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: scheme.outlineVariant),
       ),
     );
   }
@@ -1335,6 +1368,7 @@ class _RecentMemoryPhotoTileState extends State<_RecentMemoryPhotoTile> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return FutureBuilder<String>(
       future: _signedUrlFuture,
       builder: (context, snapshot) {
@@ -1345,8 +1379,8 @@ class _RecentMemoryPhotoTileState extends State<_RecentMemoryPhotoTile> {
             width: double.infinity,
             height: double.infinity,
             decoration: BoxDecoration(
-              color: DearColors.blush,
-              border: Border.all(color: DearColors.line),
+              color: scheme.surfaceContainer,
+              border: Border.all(color: scheme.outlineVariant),
               boxShadow: dearSoftShadow(0.2),
             ),
             child: imageUrl == null
@@ -1397,13 +1431,14 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: DearColors.ink,
+                color: scheme.onSurface,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -1412,7 +1447,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: DearColors.muted,
+                color: scheme.onSurfaceVariant,
                 fontSize: 13,
                 fontWeight: FontWeight.w400,
               ),
@@ -1493,13 +1528,14 @@ class _FeatureTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final scheme = Theme.of(context).colorScheme;
     final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: DearColors.ink,
+          color: scheme.onSurface,
           fontSize: 14,
           fontWeight: FontWeight.w800,
         );
     final subtitleStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: DearColors.secondary,
+          color: scheme.onSurfaceVariant,
           fontSize: 11,
         );
     final badge = item.badgeCount > 0
@@ -1507,14 +1543,14 @@ class _FeatureTile extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 20),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
-              color: DearColors.coral,
+              color: scheme.primary,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
               '${item.badgeCount}',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
+                    color: scheme.onPrimary,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -1598,7 +1634,7 @@ class _FeatureTile extends StatelessWidget {
       child: DearCard(
         padding: EdgeInsets.zero,
         shadowOpacity: 0.55,
-        borderColor: DearColors.line,
+        borderColor: scheme.outlineVariant,
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(DearRadii.medium),

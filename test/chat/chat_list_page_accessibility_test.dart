@@ -1,4 +1,5 @@
 import 'package:couple_chat_app/src/common/app_theme.dart';
+import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/anniversary/data/anniversary_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
@@ -108,6 +109,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('다크 홈은 카드·텍스트·알림 제어에 dark color scheme을 사용한다', (tester) async {
+    final theme = AppTheme.dark();
+    final scheme = theme.colorScheme;
+    await _pumpAccessibleHome(
+      tester,
+      size: const Size(375, 812),
+      textScale: 1,
+      theme: theme,
+    );
+
+    final primaryCard = tester.widget<DearCard>(
+      find.byKey(const ValueKey('primary-chat-card')),
+    );
+    final title = tester.widget<Text>(
+      find.byKey(const ValueKey('primary-chat-title')),
+    );
+    final preview = tester.widget<Text>(
+      find.byKey(const ValueKey('primary-chat-preview')),
+    );
+    final notifications = tester.widget<Icon>(
+      find.byKey(const ValueKey('home-notifications-icon')),
+    );
+
+    expect(primaryCard.color, scheme.surface);
+    expect(primaryCard.borderColor, scheme.outlineVariant);
+    expect(title.style?.color, scheme.onSurface);
+    expect(preview.style?.color, scheme.onSurfaceVariant);
+    expect(notifications.color, scheme.onSurface);
+    expect(scheme.surface, isNot(DearColors.card));
+    expect(scheme.onSurface, isNot(DearColors.ink));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('채팅방 헤더는 390x844·200% 글자에서 넘치지 않는다', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -175,6 +209,7 @@ Future<void> _pumpAccessibleHome(
   WidgetTester tester, {
   required Size size,
   required double textScale,
+  ThemeData? theme,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -241,7 +276,7 @@ Future<void> _pumpAccessibleHome(
         ),
       ],
       child: MaterialApp(
-        theme: AppTheme.light(),
+        theme: theme ?? AppTheme.light(),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),

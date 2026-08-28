@@ -137,6 +137,44 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('다크 채팅 셸은 헤더 텍스트·pill·제어에 dark color scheme을 사용한다',
+      (tester) async {
+    final theme = AppTheme.dark();
+    final scheme = theme.colorScheme;
+    await _pumpChatShell(
+      tester,
+      width: 375,
+      textScale: 1,
+      partnerName: partnerName,
+      theme: theme,
+    );
+
+    final name = tester.widget<Text>(
+      find.byKey(const ValueKey('chat-header-partner-name')),
+    );
+    final activity = tester.widget<Text>(
+      find.byKey(const ValueKey('chat-header-activity')),
+    );
+    final back = tester.widget<DearIconButton>(
+      find.byKey(const ValueKey('chat-header-back')),
+    );
+    final more = tester.widget<Icon>(
+      find.byKey(const ValueKey('chat-header-more-icon')),
+    );
+    final pill = tester.widget<Container>(
+      find.byKey(const ValueKey('chat-header-dday-surface')),
+    );
+    final pillDecoration = pill.decoration! as BoxDecoration;
+
+    expect(name.style?.color, scheme.onSurface);
+    expect(activity.style?.color, scheme.onSurfaceVariant);
+    expect(back.color, scheme.onSurface);
+    expect(more.color, scheme.onSurface);
+    expect(pillDecoration.color, scheme.primaryContainer);
+    expect(scheme.onSurface, isNot(DearColors.ink));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpChatShell(
@@ -144,6 +182,7 @@ Future<void> _pumpChatShell(
   required double width,
   required double textScale,
   required String partnerName,
+  ThemeData? theme,
 }) async {
   // Keep vertical room for ChatPage's separately tested composer; this suite
   // targets the shell header at compact iPhone widths.
@@ -191,7 +230,7 @@ Future<void> _pumpChatShell(
         ),
       ],
       child: MaterialApp(
-        theme: AppTheme.light(),
+        theme: theme ?? AppTheme.light(),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),

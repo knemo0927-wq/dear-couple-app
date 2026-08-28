@@ -22,6 +22,7 @@ class ChatShellPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final scheme = Theme.of(context).colorScheme;
     final myUserId = ref.watch(chatCurrentUserIdProvider);
     final nicknameMap =
         ref.watch(coupleNicknameMapProvider(coupleId)).valueOrNull ??
@@ -55,15 +56,15 @@ class ChatShellPage extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
     final nameStyle =
         (largeText ? textTheme.titleMedium : textTheme.titleLarge)?.copyWith(
-      color: DearColors.ink,
+      color: scheme.onSurface,
       fontWeight: FontWeight.w900,
     );
     final activityStyle = textTheme.bodySmall?.copyWith(
-      color: DearColors.secondary,
+      color: scheme.onSurfaceVariant,
       fontWeight: FontWeight.w700,
     );
     final ddayStyle = textTheme.labelLarge?.copyWith(
-      color: DearColors.coralText,
+      color: scheme.primary,
       fontWeight: FontWeight.w800,
     );
     final toolbarHeight = largeText
@@ -94,6 +95,7 @@ class ChatShellPage extends ConsumerWidget {
               }
               context.go('/chat-list');
             },
+            color: scheme.onSurface,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
         ),
@@ -310,6 +312,7 @@ class _ChatHeaderAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl?.trim();
+    final scheme = Theme.of(context).colorScheme;
     return ExcludeSemantics(
       child: Stack(
         clipBehavior: Clip.none,
@@ -318,19 +321,20 @@ class _ChatHeaderAvatar extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: DearColors.blushDeep,
+              color: scheme.primaryContainer,
               shape: BoxShape.circle,
+              // A white ring deliberately separates a photo from the app bar.
               border: Border.all(color: Colors.white, width: 3),
             ),
             clipBehavior: Clip.antiAlias,
             child: url == null || url.isEmpty
-                ? const Icon(Icons.person_rounded, color: DearColors.coral)
+                ? Icon(Icons.person_rounded, color: scheme.primary)
                 : Image.network(
                     url,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(
+                    errorBuilder: (_, __, ___) => Icon(
                       Icons.person_rounded,
-                      color: DearColors.coral,
+                      color: scheme.primary,
                     ),
                   ),
           ),
@@ -341,13 +345,14 @@ class _ChatHeaderAvatar extends StatelessWidget {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: isOnline ? const Color(0xFF44B77B) : DearColors.coral,
+                color: isOnline ? const Color(0xFF44B77B) : scheme.primary,
                 shape: BoxShape.circle,
+                // The status dot overlaps the avatar, so retain its white ring.
                 border: Border.all(color: Colors.white, width: 3),
               ),
               child: Icon(
                 isOnline ? Icons.circle : Icons.favorite_rounded,
-                color: Colors.white,
+                color: isOnline ? Colors.white : scheme.onPrimary,
                 size: isOnline ? 9 : 12,
               ),
             ),
@@ -369,14 +374,16 @@ class _HeaderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       key: const ValueKey('chat-header-dday'),
       label: '함께한 날 $label',
       child: ExcludeSemantics(
         child: Container(
+          key: const ValueKey('chat-header-dday-surface'),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: DearColors.blushDeep,
+            color: scheme.primaryContainer,
             borderRadius: BorderRadius.circular(DearRadii.pill),
           ),
           child: Row(
@@ -384,9 +391,9 @@ class _HeaderPill extends StatelessWidget {
             children: [
               Text(label, style: textStyle),
               const SizedBox(width: 5),
-              const Icon(
+              Icon(
                 Icons.favorite_rounded,
-                color: DearColors.coral,
+                color: scheme.primary,
                 size: 14,
               ),
             ],
@@ -415,6 +422,7 @@ class _ChatMoreMenuButtonState extends State<_ChatMoreMenuButton> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       key: const ValueKey('chat-header-more'),
       container: true,
@@ -428,7 +436,11 @@ class _ChatMoreMenuButtonState extends State<_ChatMoreMenuButton> {
           key: _menuKey,
           tooltip: '더보기',
           padding: EdgeInsets.zero,
-          icon: const Icon(Icons.more_horiz_rounded),
+          icon: Icon(
+            Icons.more_horiz_rounded,
+            key: const ValueKey('chat-header-more-icon'),
+            color: scheme.onSurface,
+          ),
           onSelected: widget.onSelected,
           itemBuilder: (_) => const [
             PopupMenuItem(
