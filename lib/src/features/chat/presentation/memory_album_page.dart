@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+const _albumEmptyCoverAsset = 'assets/images/album/album_empty_cover.png';
+
 class MemoryAlbumPage extends ConsumerStatefulWidget {
   const MemoryAlbumPage({super.key});
 
@@ -158,9 +160,9 @@ class _MemoryAlbumPageState extends ConsumerState<MemoryAlbumPage> {
         coverExtension: result.coverImage?.extension,
       );
       if (!mounted) return;
-      ref.invalidate(memoryAlbumsProvider(coupleId));
-      ref.invalidate(memoryAlbumFeedProvider(coupleId));
+      await ref.read(memoryAlbumFeedProvider(coupleId).notifier).refresh();
       ref.invalidate(recentMemoryAlbumPhotosProvider(coupleId));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${album.name} 앨범을 만들었어요.')),
       );
@@ -227,9 +229,9 @@ class _MemoryAlbumPageState extends ConsumerState<MemoryAlbumPage> {
         coverExtension: result.coverImage?.extension,
       );
       if (!mounted) return;
-      ref.invalidate(memoryAlbumsProvider(coupleId));
-      ref.invalidate(memoryAlbumFeedProvider(coupleId));
+      await ref.read(memoryAlbumFeedProvider(coupleId).notifier).refresh();
       ref.invalidate(recentMemoryAlbumPhotosProvider(coupleId));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${updatedAlbum.name} 앨범을 수정했어요.')),
       );
@@ -281,9 +283,9 @@ class _MemoryAlbumPageState extends ConsumerState<MemoryAlbumPage> {
         albumId: album.id,
       );
       if (!mounted) return;
-      ref.invalidate(memoryAlbumsProvider(coupleId));
-      ref.invalidate(memoryAlbumFeedProvider(coupleId));
+      await ref.read(memoryAlbumFeedProvider(coupleId).notifier).refresh();
       ref.invalidate(recentMemoryAlbumPhotosProvider(coupleId));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${album.name} 앨범을 삭제했어요.')),
       );
@@ -310,8 +312,8 @@ class _MemoryAlbumPageState extends ConsumerState<MemoryAlbumPage> {
         albumId: album.id,
       );
       if (!mounted) return;
-      ref.invalidate(memoryAlbumsProvider(coupleId));
-      ref.invalidate(memoryAlbumFeedProvider(coupleId));
+      await ref.read(memoryAlbumFeedProvider(coupleId).notifier).refresh();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${album.name}을 대표 앨범으로 설정했어요.')),
       );
@@ -410,8 +412,10 @@ class _MemoryAlbumDetailPageState
           coverStoragePath: photo.storagePath,
         );
       });
-      ref.invalidate(memoryAlbumsProvider(widget.coupleId));
-      ref.invalidate(memoryAlbumFeedProvider(widget.coupleId));
+      await ref
+          .read(memoryAlbumFeedProvider(widget.coupleId).notifier)
+          .refresh();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('대표 사진을 설정했어요.')),
       );
@@ -518,17 +522,16 @@ class _MemoryAlbumDetailPageState
         skippedParts.isEmpty ? '' : ' (${skippedParts.join(', ')})';
 
     if (succeededCount > 0) {
-      ref.invalidate(
-        memoryAlbumPhotoFeedProvider(
-          MemoryAlbumPhotoFeedArgs(
-            coupleId: widget.coupleId,
-            albumId: _album.id,
-          ),
-        ),
+      final args = MemoryAlbumPhotoFeedArgs(
+        coupleId: widget.coupleId,
+        albumId: _album.id,
       );
+      await Future.wait([
+        ref.read(memoryAlbumPhotoFeedProvider(args).notifier).refresh(),
+        ref.read(memoryAlbumFeedProvider(widget.coupleId).notifier).refresh(),
+      ]);
       ref.invalidate(recentMemoryAlbumPhotosProvider(widget.coupleId));
-      ref.invalidate(memoryAlbumsProvider(widget.coupleId));
-      ref.invalidate(memoryAlbumFeedProvider(widget.coupleId));
+      if (!mounted) return;
     }
 
     setState(() {
@@ -632,27 +635,43 @@ class _AllMemoryPhotosPageState extends ConsumerState<_AllMemoryPhotosPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            _selectionMode ? '${_selectedPhotoIds.length}장 선택' : '전체 사진',
-          ),
+          title: _selectionMode
+              ? Semantics(
+                  container: true,
+                  liveRegion: true,
+                  label: '사진 ${_selectedPhotoIds.length}장 선택됨',
+                  child: ExcludeSemantics(
+                    child: Text('${_selectedPhotoIds.length}장 선택'),
+                  ),
+                )
+              : const Text('전체 사진'),
           actions: _selectionMode
               ? [
-                  TextButton(
+                  DearIconButton(
                     key: const ValueKey('select-all-memory-photos'),
                     onPressed: _processingSelection || feed.items.isEmpty
                         ? null
                         : () => _toggleSelectAll(feed.items),
-                    child: Text(
-                      _selectedPhotoIds.length == feed.items.length
-                          ? '전체 해제'
-                          : '전체 선택',
-                    ),
+                    tooltip: _selectedPhotoIds.length == feed.items.length
+                        ? '전체 선택 해제'
+                        : '전체 사진 선택',
+                    toggled: _selectedPhotoIds.length == feed.items.length,
+                    icon: const Icon(Icons.select_all_rounded),
+                    selectedIcon: const Icon(Icons.deselect_rounded),
                   ),
-                  IconButton(
-                    tooltip: '선택 취소',
+                  const SizedBox(width: 8),
+                  TextButton(
+                    key: const ValueKey('cancel-photo-selection'),
                     onPressed: _processingSelection ? null : _exitSelectionMode,
-                    icon: const Icon(Icons.close_rounded),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(
+                        DearTouchTargets.minimum,
+                        DearTouchTargets.minimum,
+                      ),
+                    ),
+                    child: const Text('선택 취소'),
                   ),
+                  const SizedBox(width: 8),
                 ]
               : [
                   TextButton.icon(
@@ -861,7 +880,7 @@ class _AllMemoryPhotosPageState extends ConsumerState<_AllMemoryPhotosPage> {
         photoIds: _selectedPhotoIds,
       );
       if (!mounted) return;
-      _finishBulkAction('사진 $deletedCount장을 삭제했어요.');
+      await _finishBulkAction('사진 $deletedCount장을 삭제했어요.');
     } catch (error) {
       if (!mounted) return;
       setState(() => _processingSelection = false);
@@ -930,7 +949,7 @@ class _AllMemoryPhotosPageState extends ConsumerState<_AllMemoryPhotosPage> {
       final message = movedCount == 0
           ? '선택한 사진이 이미 ${destination.name}에 있어요.'
           : '사진 $movedCount장을 ${destination.name}(으)로 옮겼어요.';
-      _finishBulkAction(message);
+      await _finishBulkAction(message);
     } catch (error) {
       if (!mounted) return;
       setState(() => _processingSelection = false);
@@ -940,11 +959,13 @@ class _AllMemoryPhotosPageState extends ConsumerState<_AllMemoryPhotosPage> {
     }
   }
 
-  void _finishBulkAction(String message) {
-    ref.invalidate(memoryAlbumPhotoFeedProvider(_feedArgs));
-    ref.invalidate(memoryAlbumsProvider(widget.coupleId));
-    ref.invalidate(memoryAlbumFeedProvider(widget.coupleId));
+  Future<void> _finishBulkAction(String message) async {
+    await Future.wait([
+      ref.read(memoryAlbumPhotoFeedProvider(_feedArgs).notifier).refresh(),
+      ref.read(memoryAlbumFeedProvider(widget.coupleId).notifier).refresh(),
+    ]);
     ref.invalidate(recentMemoryAlbumPhotosProvider(widget.coupleId));
+    if (!mounted) return;
     setState(() {
       _processingSelection = false;
       _selectionMode = false;
@@ -1014,21 +1035,28 @@ class _AlbumLoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      key: const ValueKey('album-loading-skeleton'),
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-      children: const [
-        _SkeletonBox(height: 286, radius: 26),
-        SizedBox(height: 20),
-        _SkeletonBox(height: 22, width: 112),
-        SizedBox(height: 12),
-        _SkeletonBox(height: 82, radius: 22),
-        SizedBox(height: 10),
-        _SkeletonBox(height: 82, radius: 22),
-        SizedBox(height: 24),
-        _RecentPhotosSkeleton(),
-      ],
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: '앨범을 불러오는 중',
+      child: ExcludeSemantics(
+        child: ListView(
+          key: const ValueKey('album-loading-skeleton'),
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+          children: const [
+            _SkeletonBox(height: 286, radius: 26),
+            SizedBox(height: 20),
+            _SkeletonBox(height: 22, width: 112),
+            SizedBox(height: 12),
+            _SkeletonBox(height: 82, radius: 22),
+            SizedBox(height: 10),
+            _SkeletonBox(height: 82, radius: 22),
+            SizedBox(height: 24),
+            _RecentPhotosSkeleton(),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1085,35 +1113,104 @@ class _AlbumErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: DearCard(
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: message,
+      child: Center(
+        child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const DearIconBubble(
-                icon: Icons.cloud_off_rounded,
-                size: 60,
+          child: DearCard(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const DearIconBubble(
+                  icon: Icons.cloud_off_rounded,
+                  size: 60,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: DearColors.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  key: const ValueKey('album-error-retry'),
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('다시 시도'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Widget? _albumFeedInlineStatus({
+  required String keyPrefix,
+  required bool isRefreshing,
+  required Object? error,
+  required MemoryAlbumFeedFailureKind? failureKind,
+  required String refreshingLabel,
+  required String refreshErrorMessage,
+  required String realtimeErrorMessage,
+  required VoidCallback onRetry,
+}) {
+  if (isRefreshing) {
+    return DearInlineLoading(
+      key: ValueKey('$keyPrefix-refreshing'),
+      label: refreshingLabel,
+    );
+  }
+  if (error == null ||
+      (failureKind != MemoryAlbumFeedFailureKind.refresh &&
+          failureKind != MemoryAlbumFeedFailureKind.realtime)) {
+    return null;
+  }
+  return DearInlineError(
+    key: ValueKey('$keyPrefix-inline-error'),
+    message: failureKind == MemoryAlbumFeedFailureKind.realtime
+        ? realtimeErrorMessage
+        : refreshErrorMessage,
+    onRetry: onRetry,
+    retryLabel: '다시 연결하기',
+  );
+}
+
+class _AlbumEmptyCoverArtwork extends StatelessWidget {
+  const _AlbumEmptyCoverArtwork({required this.imageKey, this.width = 220});
+
+  final Key imageKey;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      image: true,
+      label: '함께 추억을 모으는 기본 앨범 표지',
+      child: ExcludeSemantics(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            width: width,
+            child: AspectRatio(
+              aspectRatio: 3 / 2,
+              child: Image.asset(
+                _albumEmptyCoverAsset,
+                key: imageKey,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                cacheWidth: 1024,
               ),
-              const SizedBox(height: 14),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: DearColors.ink,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                key: const ValueKey('album-error-retry'),
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('다시 시도'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1227,21 +1324,37 @@ class _CreateMemoryAlbumSheetState
       );
     }
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Icon(
-          Icons.add_photo_alternate_rounded,
-          color: DearColors.coral.withValues(alpha: 0.8),
-          size: 42,
+        Image.asset(
+          _albumEmptyCoverAsset,
+          key: const ValueKey('album-sheet-default-cover'),
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          cacheWidth: 1024,
         ),
-        const SizedBox(height: 8),
-        Text(
-          _picking ? '사진 선택 중' : '대표 사진 선택',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: DearColors.coralText,
-                fontWeight: FontWeight.w800,
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 12,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: DearColors.ink.withValues(alpha: 0.58),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              child: Text(
+                _picking ? '표지 사진 선택 중' : '눌러서 표지 사진 선택',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
               ),
+            ),
+          ),
         ),
       ],
     );
@@ -1250,7 +1363,7 @@ class _CreateMemoryAlbumSheetState
   @override
   Widget build(BuildContext context) {
     final name = _nameController.text.trim();
-    final canCreate = name.isNotEmpty;
+    final canCreate = name.isNotEmpty && !_picking;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
@@ -1262,7 +1375,7 @@ class _CreateMemoryAlbumSheetState
         ),
         child: SafeArea(
           top: false,
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1270,18 +1383,25 @@ class _CreateMemoryAlbumSheetState
               children: [
                 Row(
                   children: [
-                    Text(
-                      widget.title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: DearColors.ink,
-                            fontWeight: FontWeight.w800,
-                          ),
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: DearColors.ink,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
                     ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: '편집 시트 닫기',
+                    TextButton(
+                      key: const ValueKey('cancel-album-sheet'),
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(
+                          DearTouchTargets.minimum,
+                          DearTouchTargets.minimum,
+                        ),
+                      ),
+                      child: const Text('취소'),
                     ),
                   ],
                 ),
@@ -1289,55 +1409,77 @@ class _CreateMemoryAlbumSheetState
                 TextField(
                   controller: _nameController,
                   autofocus: true,
-                  textInputAction: TextInputAction.done,
+                  textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     labelText: '앨범 이름',
                     hintText: '예: 우리의 봄, 부산 마라톤',
                   ),
-                  onSubmitted: (_) {
-                    if (canCreate) {
-                      Navigator.of(context).pop(
-                        _CreateAlbumDraft(name: name, coverImage: _coverImage),
-                      );
-                    }
-                  },
+                  onSubmitted: (_) => FocusScope.of(context).unfocus(),
                 ),
                 const SizedBox(height: 16),
-                InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: _picking ? null : _pickCoverImage,
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: DearColors.blush,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: DearColors.line),
+                Text(
+                  '표지 사진 (선택)',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: DearColors.ink,
+                        fontWeight: FontWeight.w800,
                       ),
-                      child: _buildCoverPicker(context),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '고르지 않으면 기본 표지가 사용돼요.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DearColors.secondary,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Semantics(
+                  button: true,
+                  enabled: !_picking,
+                  label: _picking
+                      ? '표지 사진 선택 중'
+                      : _coverImage != null ||
+                              widget.initialCoverStoragePath != null
+                          ? '표지 사진 변경'
+                          : '표지 사진 선택, 선택 사항',
+                  onTap: _picking ? null : _pickCoverImage,
+                  excludeSemantics: true,
+                  child: InkWell(
+                    key: const ValueKey('album-cover-picker'),
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: _picking ? null : _pickCoverImage,
+                    child: AspectRatio(
+                      aspectRatio: 3 / 2,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: DearColors.blush,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: DearColors.line),
+                        ),
+                        child: _buildCoverPicker(context),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: _coverImage == null
-                          ? null
-                          : () => setState(() => _coverImage = null),
-                      child: const Text('선택 취소'),
+                if (_coverImage != null) ...[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      key: const ValueKey('use-default-album-cover'),
+                      onPressed: () => setState(() => _coverImage = null),
+                      child: Text(
+                        widget.initialCoverStoragePath == null
+                            ? '표지 없이 만들기'
+                            : '기존 표지 사용',
+                      ),
                     ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _picking ? null : _pickCoverImage,
-                      child: Text(_coverImage == null ? '사진 선택' : '사진 변경'),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
+                    key: const ValueKey('submit-album-sheet'),
                     onPressed: !canCreate
                         ? null
                         : () => Navigator.of(context).pop(
@@ -1681,6 +1823,7 @@ class _AlbumSignedImageState extends State<_AlbumSignedImage> {
   static const Duration _signedUrlRefreshInterval = Duration(minutes: 55);
 
   Future<String>? _signedUrlFuture;
+  int _retryGeneration = 0;
 
   @override
   void initState() {
@@ -1698,6 +1841,17 @@ class _AlbumSignedImageState extends State<_AlbumSignedImage> {
     final storagePath = widget.storagePath;
     _signedUrlFuture =
         storagePath == null ? null : _resolveSignedUrl(storagePath);
+  }
+
+  void _retry() {
+    final storagePath = widget.storagePath;
+    if (storagePath == null) return;
+    _signedUrlCache.remove(storagePath);
+    _inflightSignedUrlRequests.remove(storagePath);
+    setState(() {
+      _retryGeneration++;
+      _signedUrlFuture = _resolveSignedUrl(storagePath);
+    });
   }
 
   Future<String> _resolveSignedUrl(String storagePath) {
@@ -1734,56 +1888,119 @@ class _AlbumSignedImageState extends State<_AlbumSignedImage> {
   Widget build(BuildContext context) {
     final future = _signedUrlFuture;
     if (future == null) {
-      return DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: DearGradients.softCard,
-        ),
-        child: Center(
-          child: Icon(
-            Icons.image_rounded,
-            color: DearColors.coral.withValues(alpha: 0.62),
-            size: widget.iconSize,
-          ),
-        ),
+      return Image.asset(
+        _albumEmptyCoverAsset,
+        key: const ValueKey('default-album-cover'),
+        fit: widget.fit,
+        filterQuality: FilterQuality.medium,
+        cacheWidth: 1024,
+        semanticLabel: '기본 앨범 표지',
       );
     }
 
     return FutureBuilder<String>(
       future: future,
       builder: (context, snapshot) {
+        final storagePath = widget.storagePath!;
+        if (snapshot.hasError) {
+          return _AlbumImageFailure(
+            key: ValueKey('retry-album-cover-$storagePath'),
+            retryLabel: '앨범 표지 다시 불러오기',
+            onRetry: _retry,
+          );
+        }
         final imageUrl = snapshot.data;
         if (imageUrl == null) {
-          return DecoratedBox(
-            decoration: const BoxDecoration(gradient: DearGradients.softCard),
-            child: Center(
-              child: Icon(
-                Icons.image_rounded,
-                color: DearColors.coral.withValues(alpha: 0.5),
-                size: widget.iconSize,
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Opacity(
+                opacity: 0.48,
+                child: Image.asset(
+                  _albumEmptyCoverAsset,
+                  fit: widget.fit,
+                  filterQuality: FilterQuality.low,
+                  cacheWidth: 1024,
+                ),
               ),
-            ),
+              Center(
+                child: SizedBox.square(
+                  dimension: widget.iconSize.clamp(20, 28),
+                  child: const CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ],
           );
         }
 
         return Image.network(
           imageUrl,
+          key: ValueKey('album-cover-network-$_retryGeneration'),
           fit: widget.fit,
           gaplessPlayback: true,
           filterQuality: FilterQuality.medium,
           errorBuilder: (context, error, stackTrace) {
-            return DecoratedBox(
-              decoration: const BoxDecoration(gradient: DearGradients.softCard),
-              child: Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  color: DearColors.coral,
-                  size: widget.iconSize,
-                ),
-              ),
+            return _AlbumImageFailure(
+              key: ValueKey('retry-album-cover-network-$storagePath'),
+              retryLabel: '앨범 표지 다시 불러오기',
+              onRetry: _retry,
             );
           },
         );
       },
+    );
+  }
+}
+
+class _AlbumImageFailure extends StatelessWidget {
+  const _AlbumImageFailure({
+    required this.retryLabel,
+    required this.onRetry,
+    this.retryAlignment = Alignment.center,
+    super.key,
+  });
+
+  final String retryLabel;
+  final VoidCallback onRetry;
+  final Alignment retryAlignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      liveRegion: true,
+      label: '이미지를 불러오지 못했어요',
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(
+            opacity: 0.4,
+            child: Image.asset(
+              _albumEmptyCoverAsset,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+              cacheWidth: 1024,
+            ),
+          ),
+          Align(
+            alignment: retryAlignment,
+            child: Material(
+              color: Colors.transparent,
+              child: DearIconButton(
+                tooltip: retryLabel,
+                semanticLabel: retryLabel,
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                color: DearColors.coralText,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1808,30 +2025,43 @@ class _AlbumListView extends ConsumerWidget {
     final albumFeed = ref.watch(memoryAlbumFeedProvider(coupleId));
     final recentPhotosAsync =
         ref.watch(recentMemoryAlbumPhotosProvider(coupleId));
+    final controller = ref.read(memoryAlbumFeedProvider(coupleId).notifier);
+    final inlineStatus = _albumFeedInlineStatus(
+      keyPrefix: 'album-feed',
+      isRefreshing: albumFeed.isRefreshing,
+      error: albumFeed.error,
+      failureKind: albumFeed.failureKind,
+      refreshingLabel: '앨범을 다시 불러오는 중',
+      refreshErrorMessage: '앨범을 새로 불러오지 못했어요. 기존 앨범은 그대로 보여드려요.',
+      realtimeErrorMessage: '새 앨범 소식을 연결하지 못했어요. 현재 앨범은 그대로 볼 수 있어요.',
+      onRetry: () => controller.retry(),
+    );
 
-    if (albumFeed.isLoadingInitial && albumFeed.items.isEmpty) {
+    if (!albumFeed.hasLoadedOnce && albumFeed.isLoadingInitial) {
       return const _AlbumLoadingSkeleton();
     }
-    if (albumFeed.error != null && albumFeed.items.isEmpty) {
+    if (!albumFeed.hasLoadedOnce && albumFeed.error != null) {
       return _AlbumErrorState(
         message: '앨범을 불러오지 못했어요.',
-        onRetry: () =>
-            ref.read(memoryAlbumFeedProvider(coupleId).notifier).refresh(),
+        onRetry: () => controller.retry(),
       );
     }
     final albums = albumFeed.items;
     if (albums.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: DearCard(
+      return ListView(
+        key: const ValueKey('album-empty-state'),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 116),
+        children: [
+          if (inlineStatus != null) ...[
+            inlineStatus,
+            const SizedBox(height: 16),
+          ],
+          DearCard(
             padding: const EdgeInsets.all(24),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                const DearIconBubble(
-                  icon: Icons.photo_library_rounded,
-                  size: 64,
+                const _AlbumEmptyCoverArtwork(
+                  imageKey: ValueKey('album-empty-cover-artwork'),
                 ),
                 const SizedBox(height: 14),
                 Text(
@@ -1840,6 +2070,7 @@ class _AlbumListView extends ConsumerWidget {
                         color: DearColors.ink,
                         fontWeight: FontWeight.w900,
                       ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1858,7 +2089,7 @@ class _AlbumListView extends ConsumerWidget {
               ],
             ),
           ),
-        ),
+        ],
       );
     }
 
@@ -1871,9 +2102,12 @@ class _AlbumListView extends ConsumerWidget {
     );
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.metrics.extentAfter < 320 && albumFeed.hasMore) {
+        if (notification.metrics.extentAfter < 320 &&
+            albumFeed.hasMore &&
+            !albumFeed.isRefreshing &&
+            albumFeed.failureKind != MemoryAlbumFeedFailureKind.loadMore) {
           unawaited(
-            ref.read(memoryAlbumFeedProvider(coupleId).notifier).loadMore(),
+            controller.loadMore(),
           );
         }
         return false;
@@ -1881,6 +2115,10 @@ class _AlbumListView extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 116),
         children: [
+          if (inlineStatus != null) ...[
+            inlineStatus,
+            const SizedBox(height: 16),
+          ],
           _AlbumCoverCard(
             album: coverAlbum,
             large: true,
@@ -1907,15 +2145,14 @@ class _AlbumListView extends ConsumerWidget {
           ),
           if (albumFeed.isLoadingMore) ...[
             const SizedBox(height: 18),
-            const Center(child: CircularProgressIndicator()),
-          ] else if (albumFeed.error != null && albumFeed.hasMore) ...[
+            const DearInlineLoading(label: '앨범을 더 불러오는 중'),
+          ] else if (albumFeed.error != null &&
+              albumFeed.failureKind == MemoryAlbumFeedFailureKind.loadMore) ...[
             const SizedBox(height: 12),
             Center(
               child: OutlinedButton.icon(
                 key: const ValueKey('retry-album-page'),
-                onPressed: () => ref
-                    .read(memoryAlbumFeedProvider(coupleId).notifier)
-                    .loadMore(),
+                onPressed: () => controller.retry(),
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('앨범 더 불러오기 다시 시도'),
               ),
@@ -2370,24 +2607,45 @@ class _AlbumDetailView extends ConsumerWidget {
       albumId: album.id,
     );
     final feed = ref.watch(memoryAlbumPhotoFeedProvider(args));
+    final controller = ref.read(memoryAlbumPhotoFeedProvider(args).notifier);
+    final inlineStatus = _albumFeedInlineStatus(
+      keyPrefix: 'album-photo-feed',
+      isRefreshing: feed.isRefreshing,
+      error: feed.error,
+      failureKind: feed.failureKind,
+      refreshingLabel: '앨범 사진을 다시 불러오는 중',
+      refreshErrorMessage: '사진을 새로 불러오지 못했어요. 기존 사진은 그대로 보여드려요.',
+      realtimeErrorMessage: '새 사진 소식을 연결하지 못했어요. 현재 사진은 그대로 볼 수 있어요.',
+      onRetry: () => controller.retry(),
+    );
 
-    if (feed.isLoadingInitial && feed.items.isEmpty) {
+    if (!feed.hasLoadedOnce && feed.isLoadingInitial) {
       return const _PhotoGridSkeleton();
     }
-    if (feed.error != null && feed.items.isEmpty) {
+    if (!feed.hasLoadedOnce && feed.error != null) {
       return _AlbumErrorState(
         message: '사진을 불러오지 못했어요.',
-        onRetry: () =>
-            ref.read(memoryAlbumPhotoFeedProvider(args).notifier).refresh(),
+        onRetry: () => controller.retry(),
       );
     }
     if (feed.items.isEmpty) {
-      return _AlbumEmptyPhotoState(
-        albumName: album.name,
-        uploading: uploading,
-        uploadedCount: uploadedCount,
-        uploadTotal: uploadTotal,
-        onUploadPhoto: onUploadPhoto,
+      return Column(
+        children: [
+          if (inlineStatus != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: inlineStatus,
+            ),
+          Expanded(
+            child: _AlbumEmptyPhotoState(
+              albumName: album.name,
+              uploading: uploading,
+              uploadedCount: uploadedCount,
+              uploadTotal: uploadTotal,
+              onUploadPhoto: onUploadPhoto,
+            ),
+          ),
+        ],
       );
     }
 
@@ -2398,16 +2656,25 @@ class _AlbumDetailView extends ConsumerWidget {
             uploadedCount: uploadedCount,
             uploadTotal: uploadTotal,
           ),
+        if (inlineStatus != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: inlineStatus,
+          ),
         Expanded(
           child: _PaginatedMemoryPhotoGrid(
             photos: feed.items,
             heroPrefix: 'memory-album',
             coverPhotoId: album.coverPhotoId,
             isLoadingMore: feed.isLoadingMore,
-            loadMoreError: feed.error,
-            onLoadMore: () => ref
-                .read(memoryAlbumPhotoFeedProvider(args).notifier)
-                .loadMore(),
+            loadMoreError:
+                feed.failureKind == MemoryAlbumFeedFailureKind.loadMore
+                    ? feed.error
+                    : null,
+            onLoadMore: () =>
+                feed.failureKind == MemoryAlbumFeedFailureKind.loadMore
+                    ? controller.retry()
+                    : controller.loadMore(),
             onSetCoverPhoto: onSetCoverPhoto,
           ),
         ),
@@ -2436,54 +2703,97 @@ class _AllMemoryPhotosView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final feed = ref.watch(memoryAlbumPhotoFeedProvider(args));
+    final controller = ref.read(memoryAlbumPhotoFeedProvider(args).notifier);
+    final inlineStatus = _albumFeedInlineStatus(
+      keyPrefix: 'all-photo-feed',
+      isRefreshing: feed.isRefreshing,
+      error: feed.error,
+      failureKind: feed.failureKind,
+      refreshingLabel: '전체 사진을 다시 불러오는 중',
+      refreshErrorMessage: '전체 사진을 새로 불러오지 못했어요. 기존 사진은 그대로 보여드려요.',
+      realtimeErrorMessage: '새 사진 소식을 연결하지 못했어요. 현재 사진은 그대로 볼 수 있어요.',
+      onRetry: () => controller.retry(),
+    );
 
-    if (feed.isLoadingInitial && feed.items.isEmpty) {
+    if (!feed.hasLoadedOnce && feed.isLoadingInitial) {
       return const _PhotoGridSkeleton();
     }
-    if (feed.error != null && feed.items.isEmpty) {
+    if (!feed.hasLoadedOnce && feed.error != null) {
       return _AlbumErrorState(
         message: '전체 사진을 불러오지 못했어요.',
-        onRetry: () =>
-            ref.read(memoryAlbumPhotoFeedProvider(args).notifier).refresh(),
+        onRetry: () => controller.retry(),
       );
     }
     if (feed.items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: DearCard(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const DearIconBubble(icon: Icons.photo_library_rounded),
-                const SizedBox(height: 12),
-                Text(
-                  hasActiveFilters ? '조건에 맞는 사진이 없어요.' : '아직 모아볼 사진이 없어요.',
-                  key: const ValueKey('all-photo-empty-message'),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: DearColors.ink,
-                        fontWeight: FontWeight.w800,
+      return Column(
+        children: [
+          if (inlineStatus != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: inlineStatus,
+            ),
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: DearCard(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _AlbumEmptyCoverArtwork(
+                        imageKey: ValueKey('all-photo-empty-cover-artwork'),
+                        width: 180,
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        hasActiveFilters
+                            ? '조건에 맞는 사진이 없어요.'
+                            : '아직 모아볼 사진이 없어요.',
+                        key: const ValueKey('all-photo-empty-message'),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: DearColors.ink,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       );
     }
 
-    return _PaginatedMemoryPhotoGrid(
-      photos: feed.items,
-      heroPrefix: 'all-memory-album',
-      isLoadingMore: feed.isLoadingMore,
-      loadMoreError: feed.error,
-      selectionMode: selectionMode,
-      selectedPhotoIds: selectedPhotoIds,
-      onToggleSelection: onToggleSelection,
-      onBeginSelection: onBeginSelection,
-      onLoadMore: () =>
-          ref.read(memoryAlbumPhotoFeedProvider(args).notifier).loadMore(),
+    return Column(
+      children: [
+        if (inlineStatus != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: inlineStatus,
+          ),
+        Expanded(
+          child: _PaginatedMemoryPhotoGrid(
+            photos: feed.items,
+            heroPrefix: 'all-memory-album',
+            isLoadingMore: feed.isLoadingMore,
+            loadMoreError:
+                feed.failureKind == MemoryAlbumFeedFailureKind.loadMore
+                    ? feed.error
+                    : null,
+            selectionMode: selectionMode,
+            selectedPhotoIds: selectedPhotoIds,
+            onToggleSelection: onToggleSelection,
+            onBeginSelection: onBeginSelection,
+            onLoadMore: () =>
+                feed.failureKind == MemoryAlbumFeedFailureKind.loadMore
+                    ? controller.retry()
+                    : controller.loadMore(),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2675,45 +2985,50 @@ class _PhotoSelectionActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      elevation: 12,
-      color: DearColors.card,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: const ValueKey('move-selected-memory-photos'),
-                  onPressed: processing ? null : onMove,
-                  icon: const Icon(Icons.drive_file_move_rounded),
-                  label: const Text('이동'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  key: const ValueKey('delete-selected-memory-photos'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: DearColors.error,
-                    foregroundColor: Colors.white,
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: processing ? '선택한 사진 처리 중' : '사진 $selectedCount장 선택됨',
+      child: Material(
+        elevation: 12,
+        color: DearColors.card,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('move-selected-memory-photos'),
+                    onPressed: processing ? null : onMove,
+                    icon: const Icon(Icons.drive_file_move_rounded),
+                    label: const Text('이동'),
                   ),
-                  onPressed: processing ? null : onDelete,
-                  icon: processing
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.delete_outline_rounded),
-                  label: Text(processing ? '처리 중' : '삭제'),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    key: const ValueKey('delete-selected-memory-photos'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: DearColors.error,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: processing ? null : onDelete,
+                    icon: processing
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.delete_outline_rounded),
+                    label: Text(processing ? '처리 중' : '삭제'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2807,16 +3122,16 @@ class _AlbumEmptyPhotoState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: DearCard(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const DearIconBubble(
-                icon: Icons.add_photo_alternate_rounded,
-                size: 64,
+              const _AlbumEmptyCoverArtwork(
+                imageKey: ValueKey('album-photo-empty-cover-artwork'),
+                width: 190,
               ),
               const SizedBox(height: 14),
               Text(
@@ -2943,19 +3258,31 @@ class _PaginatedMemoryPhotoGrid extends StatelessWidget {
         itemBuilder: (context, index) {
           if (index == photos.length) {
             if (isLoadingMore) {
-              return const Center(
-                child: SizedBox.square(
-                  dimension: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              return Semantics(
+                container: true,
+                liveRegion: true,
+                label: '사진을 더 불러오는 중',
+                child: const ExcludeSemantics(
+                  child: Center(
+                    child: SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
                 ),
               );
             }
-            return Center(
-              child: IconButton(
-                key: const ValueKey('album-load-more-retry'),
-                tooltip: '사진 더 불러오기 다시 시도',
-                onPressed: onLoadMore,
-                icon: const Icon(Icons.refresh_rounded),
+            return Semantics(
+              container: true,
+              liveRegion: true,
+              label: '사진을 더 불러오지 못했어요',
+              child: Center(
+                child: DearIconButton(
+                  key: const ValueKey('album-load-more-retry'),
+                  tooltip: '사진 더 불러오기 다시 시도',
+                  onPressed: onLoadMore,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
               ),
             );
           }
@@ -2987,17 +3314,24 @@ class _PhotoGridSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      key: const ValueKey('album-photo-loading-skeleton'),
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: '앨범 사진을 불러오는 중',
+      child: ExcludeSemantics(
+        child: GridView.builder(
+          key: const ValueKey('album-photo-loading-skeleton'),
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
+          itemCount: 12,
+          itemBuilder: (_, __) => const _SkeletonBox(height: 100, radius: 16),
+        ),
       ),
-      itemCount: 12,
-      itemBuilder: (_, __) => const _SkeletonBox(height: 100, radius: 16),
     );
   }
 }
@@ -3038,6 +3372,7 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
   static const Duration _signedUrlRefreshInterval = Duration(minutes: 55);
 
   late Future<String> _signedUrlFuture;
+  int _retryGeneration = 0;
 
   @override
   void initState() {
@@ -3049,8 +3384,19 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
   void didUpdateWidget(covariant _MemoryAlbumPhotoTile oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.storagePath != widget.storagePath) {
+      _retryGeneration = 0;
       _signedUrlFuture = _resolveSignedUrl(widget.storagePath);
     }
+  }
+
+  void _retryImage() {
+    final storagePath = widget.storagePath;
+    _signedUrlCache.remove(storagePath);
+    _inflightSignedUrlRequests.remove(storagePath);
+    setState(() {
+      _retryGeneration++;
+      _signedUrlFuture = _resolveSignedUrl(storagePath);
+    });
   }
 
   Future<String> _resolveSignedUrl(String storagePath) {
@@ -3164,146 +3510,173 @@ class _MemoryAlbumPhotoTileState extends ConsumerState<_MemoryAlbumPhotoTile> {
       future: _signedUrlFuture,
       builder: (context, snapshot) {
         final imageUrl = snapshot.data;
+        final VoidCallback? onTap = widget.selectionMode
+            ? widget.onToggleSelection
+            : imageUrl == null
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ChatImageViewPage(
+                          imageUrl: imageUrl,
+                          heroTag: widget.heroTag,
+                        ),
+                      ),
+                    );
+                  };
+        final VoidCallback? onLongPress = widget.selectionMode
+            ? widget.onToggleSelection
+            : widget.onBeginSelection ??
+                (widget.onSetAsCover == null ? null : _showPhotoActions);
         return Semantics(
+          key: ValueKey('memory-photo-semantics-${widget.storagePath}'),
+          container: true,
+          explicitChildNodes: true,
           button: true,
+          enabled: onTap != null,
           selected: widget.selectionMode ? widget.selected : null,
-          label: widget.semanticsLabel,
+          label: widget.selectionMode
+              ? '${widget.semanticsLabel}, ${widget.selected ? '선택됨' : '선택 안 됨'}'
+              : widget.semanticsLabel,
           hint: widget.selectionMode
               ? (widget.selected ? '선택됨, 선택 해제' : '선택')
               : '사진 크게 보기',
-          child: GestureDetector(
-            key: ValueKey('memory-photo-${widget.storagePath}'),
-            onTap: widget.selectionMode
-                ? widget.onToggleSelection
-                : imageUrl == null
-                    ? null
-                    : () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ChatImageViewPage(
-                              imageUrl: imageUrl,
-                              heroTag: widget.heroTag,
-                            ),
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minWidth: DearTouchTargets.minimum,
+              minHeight: DearTouchTargets.minimum,
+            ),
+            child: GestureDetector(
+              key: ValueKey('memory-photo-${widget.storagePath}'),
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Hero(
+                  tag: widget.heroTag,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: DearColors.blush,
+                          border: Border.all(color: DearColors.line),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.image_rounded,
+                            color: DearColors.coral.withValues(alpha: 0.6),
                           ),
-                        );
-                      },
-            onLongPress: widget.selectionMode
-                ? widget.onToggleSelection
-                : widget.onBeginSelection ??
-                    (widget.onSetAsCover == null ? null : _showPhotoActions),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Hero(
-                tag: widget.heroTag,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: DearColors.blush,
-                        border: Border.all(color: DearColors.line),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.image_rounded,
-                          color: DearColors.coral.withValues(alpha: 0.6),
                         ),
                       ),
-                    ),
-                    if (imageUrl != null)
-                      Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                        filterQuality: FilterQuality.medium,
-                        loadingBuilder: (context, child, loadingProgress) =>
-                            child,
-                        errorBuilder: (context, error, stackTrace) {
-                          return DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: DearColors.blush,
-                              border: Border.all(color: DearColors.line),
+                      if (snapshot.hasError)
+                        Positioned.fill(
+                          child: _AlbumImageFailure(
+                            key: ValueKey(
+                              'retry-memory-photo-${widget.storagePath}',
                             ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                color: DearColors.coral,
+                            retryLabel: '사진 다시 불러오기',
+                            onRetry: _retryImage,
+                            retryAlignment: Alignment.topLeft,
+                          ),
+                        ),
+                      if (imageUrl != null)
+                        Image.network(
+                          imageUrl,
+                          key: ValueKey(
+                            'memory-photo-network-$_retryGeneration',
+                          ),
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          filterQuality: FilterQuality.medium,
+                          loadingBuilder: (context, child, loadingProgress) =>
+                              child,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _AlbumImageFailure(
+                              key: ValueKey(
+                                'retry-memory-photo-network-${widget.storagePath}',
+                              ),
+                              retryLabel: '사진 다시 불러오기',
+                              onRetry: _retryImage,
+                              retryAlignment: Alignment.topLeft,
+                            );
+                          },
+                        ),
+                      if (widget.isCover)
+                        Positioned(
+                          right: 7,
+                          top: 7,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: DearColors.ink.withValues(alpha: 0.48),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.favorite_rounded,
+                                    color: Colors.white,
+                                    size: 12,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '대표',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          height: 1,
+                                        ),
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    if (widget.isCover)
-                      Positioned(
-                        right: 7,
-                        top: 7,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: DearColors.ink.withValues(alpha: 0.48),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 5,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.favorite_rounded,
-                                  color: Colors.white,
-                                  size: 12,
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  '대표',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1,
-                                      ),
-                                ),
-                              ],
-                            ),
                           ),
                         ),
-                      ),
-                    if (widget.selectionMode)
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: widget.selected
-                                ? DearColors.coral.withValues(alpha: 0.24)
-                                : Colors.transparent,
-                            border: Border.all(
+                      if (widget.selectionMode)
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
                               color: widget.selected
-                                  ? DearColors.coral
-                                  : Colors.white.withValues(alpha: 0.72),
-                              width: widget.selected ? 3 : 1,
+                                  ? DearColors.coral.withValues(alpha: 0.24)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: widget.selected
+                                    ? DearColors.coral
+                                    : Colors.white.withValues(alpha: 0.72),
+                                width: widget.selected ? 3 : 1,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    if (widget.selectionMode)
-                      Positioned(
-                        right: 7,
-                        top: 7,
-                        child: Icon(
-                          widget.selected
-                              ? Icons.check_circle_rounded
-                              : Icons.radio_button_unchecked_rounded,
-                          color:
-                              widget.selected ? DearColors.coral : Colors.white,
-                          shadows: const [
-                            Shadow(color: Colors.black38, blurRadius: 4),
-                          ],
+                      if (widget.selectionMode)
+                        Positioned(
+                          right: 7,
+                          top: 7,
+                          child: Icon(
+                            widget.selected
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: widget.selected
+                                ? DearColors.coral
+                                : Colors.white,
+                            shadows: const [
+                              Shadow(color: Colors.black38, blurRadius: 4),
+                            ],
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

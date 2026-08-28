@@ -76,6 +76,7 @@ flutter:
     - assets/images/home_icons/korea_map.png
     - assets/images/home_icons/world_map.png
     - assets/images/home_icons/settings.png
+    - assets/images/album/album_empty_cover.png
     - assets/images/anniversary/
     - assets/maps/skorea_municipalities_geo_simple.json
     - assets/maps/world_countries_globe_simple.json
