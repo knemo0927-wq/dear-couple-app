@@ -19,15 +19,18 @@ class ChatMediaPage extends ConsumerStatefulWidget {
 class _ChatMediaPageState extends ConsumerState<ChatMediaPage> {
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = <ChatMessage>[];
-  bool _loading = false;
+  _MediaLoadPhase _loadPhase = _MediaLoadPhase.idle;
+  bool _hasLoadedOnce = false;
   bool _hasMore = true;
-  String? _error;
+  String? _initialError;
+  String? _refreshError;
+  String? _loadMoreError;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load(reset: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitial());
   }
 
   @override
@@ -38,38 +41,111 @@ class _ChatMediaPageState extends ConsumerState<ChatMediaPage> {
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
-    if (_scrollController.position.extentAfter < 280) _load();
+    if (_scrollController.position.extentAfter < 280) _loadMore();
   }
 
-  Future<void> _load({bool reset = false}) async {
-    if (_loading || (!reset && !_hasMore)) return;
+  Future<void> _loadInitial() async {
+    if (_loadPhase != _MediaLoadPhase.idle) return;
     setState(() {
-      _loading = true;
-      _error = null;
-      if (reset) {
-        _messages.clear();
-        _hasMore = true;
-      }
+      _loadPhase = _MediaLoadPhase.initial;
     });
     try {
       final page = await ref.read(chatFetchMediaPageProvider)(
         coupleId: widget.coupleId,
-        beforeMessageId: reset || _messages.isEmpty ? null : _messages.last.id,
+        beforeMessageId: null,
       );
       if (!mounted) return;
-      final seen = _messages.map((message) => message.id).toSet();
+      final replacement = _dedupeMessages(page.messages);
       setState(() {
-        _messages.addAll(
-          page.messages.where((message) => seen.add(message.id)),
-        );
+        _messages
+          ..clear()
+          ..addAll(replacement);
         _hasMore = page.hasMore;
+        _hasLoadedOnce = true;
+        _initialError = null;
+        _refreshError = null;
+        _loadMoreError = null;
+        _loadPhase = _MediaLoadPhase.idle;
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = toFriendlyErrorMessage(error));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      setState(() {
+        _initialError = toFriendlyErrorMessage(error);
+        _loadPhase = _MediaLoadPhase.idle;
+      });
     }
+  }
+
+  Future<void> _refresh() async {
+    if (_loadPhase != _MediaLoadPhase.idle) return;
+    setState(() => _loadPhase = _MediaLoadPhase.refresh);
+    try {
+      final page = await ref.read(chatFetchMediaPageProvider)(
+        coupleId: widget.coupleId,
+        beforeMessageId: null,
+      );
+      if (!mounted) return;
+      final replacement = _dedupeMessages(page.messages);
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(replacement);
+        _hasMore = page.hasMore;
+        _hasLoadedOnce = true;
+        _initialError = null;
+        _refreshError = null;
+        _loadMoreError = null;
+        _loadPhase = _MediaLoadPhase.idle;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _refreshError = toFriendlyErrorMessage(error);
+        _loadPhase = _MediaLoadPhase.idle;
+      });
+    }
+  }
+
+  Future<void> _loadMore({bool retry = false}) async {
+    if (_loadPhase != _MediaLoadPhase.idle ||
+        !_hasLoadedOnce ||
+        !_hasMore ||
+        (_loadMoreError != null && !retry)) {
+      return;
+    }
+    setState(() => _loadPhase = _MediaLoadPhase.loadMore);
+    try {
+      final page = await ref.read(chatFetchMediaPageProvider)(
+        coupleId: widget.coupleId,
+        beforeMessageId: _messages.isEmpty ? null : _messages.last.id,
+      );
+      if (!mounted) return;
+      final seen = _messages.map((message) => message.id).toSet();
+      final additions = _dedupeMessages(page.messages, seen: seen);
+      setState(() {
+        _messages.addAll(additions);
+        _hasMore = page.hasMore;
+        _loadMoreError = null;
+        _loadPhase = _MediaLoadPhase.idle;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadMoreError = toFriendlyErrorMessage(error);
+        _loadPhase = _MediaLoadPhase.idle;
+      });
+    }
+  }
+
+  List<ChatMessage> _dedupeMessages(
+    Iterable<ChatMessage> messages, {
+    Set<int>? seen,
+  }) {
+    final ids = seen ?? <int>{};
+    return [
+      for (final message in messages)
+        if (ids.add(message.id)) message,
+    ];
   }
 
   @override
@@ -78,7 +154,7 @@ class _ChatMediaPageState extends ConsumerState<ChatMediaPage> {
       appBar: AppBar(title: const Text('사진 모아보기')),
       body: DearBackground(
         child: RefreshIndicator(
-          onRefresh: () => _load(reset: true),
+          onRefresh: _refresh,
           child: _buildBody(context),
         ),
       ),
@@ -86,7 +162,23 @@ class _ChatMediaPageState extends ConsumerState<ChatMediaPage> {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (_loading && _messages.isEmpty) {
+    if (!_hasLoadedOnce && _initialError != null) {
+      return ListView(
+        key: const Key('chat-media-initial-error'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(DearSpacing.space24),
+        children: [
+          const SizedBox(height: 120),
+          DearInlineError(
+            message: _initialError!,
+            onRetry: _loadInitial,
+            retrying: _loadPhase == _MediaLoadPhase.initial,
+          ),
+        ],
+      );
+    }
+
+    if (!_hasLoadedOnce) {
       return GridView.builder(
         key: const Key('chat-media-loading'),
         physics: const AlwaysScrollableScrollPhysics(),
@@ -105,105 +197,113 @@ class _ChatMediaPageState extends ConsumerState<ChatMediaPage> {
         ),
       );
     }
-    if (_error != null && _messages.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        children: [
-          const SizedBox(height: 120),
-          DearCard(
-            child: Column(
-              children: [
-                const DearIconBubble(icon: Icons.broken_image_outlined),
-                const SizedBox(height: 12),
-                Text(_error!, textAlign: TextAlign.center),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () => _load(reset: true),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('다시 시도'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-    if (_messages.isEmpty) {
-      return ListView(
-        key: const Key('chat-media-empty'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(28),
-        children: [
-          const SizedBox(height: 110),
-          const DearIconBubble(icon: Icons.photo_library_outlined, size: 68),
-          const SizedBox(height: 14),
-          Text(
-            '아직 주고받은 사진이 없어요',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: DearColors.ink,
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '채팅에서 사진을 보내면 이곳에 모여요.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: DearColors.secondary,
-                ),
-          ),
-        ],
-      );
-    }
 
     return CustomScrollView(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          sliver: SliverGrid.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 4,
-              mainAxisSpacing: 4,
+        if (_refreshError != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                DearSpacing.space12,
+                DearSpacing.space12,
+                DearSpacing.space12,
+                0,
+              ),
+              child: DearInlineError(
+                key: const Key('chat-media-refresh-error'),
+                message: _refreshError!,
+                onRetry: _refresh,
+                retrying: _loadPhase == _MediaLoadPhase.refresh,
+              ),
             ),
-            itemCount: _messages.length,
-            itemBuilder: (context, index) => _MediaTile(
-              key: ValueKey<int>(_messages[index].id),
-              message: _messages[index],
-              resolveUrl: ref.read(chatResolveImageUrlProvider),
-            ),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            child: Center(
-              child: _loading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : _error != null
-                      ? TextButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('사진을 더 불러오지 못했어요 · 다시 시도'),
-                        )
-                      : !_hasMore
-                          ? const Text('모든 사진을 불러왔어요.')
-                          : const SizedBox.shrink(),
+          )
+        else if (_loadPhase == _MediaLoadPhase.refresh)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                DearSpacing.space12,
+                DearSpacing.space12,
+                DearSpacing.space12,
+                0,
+              ),
+              child: DearInlineLoading(
+                key: Key('chat-media-refresh-loading'),
+                label: '사진 목록을 새로고침하는 중',
+              ),
             ),
           ),
-        ),
+        if (_messages.isEmpty)
+          const SliverFillRemaining(
+            key: Key('chat-media-empty'),
+            hasScrollBody: false,
+            child: DearEmptyState(
+              title: '아직 주고받은 사진이 없어요',
+              message: '채팅에서 사진을 보내면 이곳에 모여요.',
+              icon: Icons.photo_library_outlined,
+            ),
+          )
+        else ...[
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            sliver: SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 4,
+                mainAxisSpacing: 4,
+              ),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) => _MediaTile(
+                key: ValueKey<int>(_messages[index].id),
+                message: _messages[index],
+                resolveUrl: ref.read(chatResolveImageUrlProvider),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(child: _buildLoadMoreFooter()),
+        ],
       ],
     );
   }
+
+  Widget _buildLoadMoreFooter() {
+    if (_loadMoreError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(DearSpacing.space12),
+        child: DearInlineError(
+          key: const Key('chat-media-load-more-error'),
+          message: _loadMoreError!,
+          onRetry: () => _loadMore(retry: true),
+          retrying: _loadPhase == _MediaLoadPhase.loadMore,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: Center(
+        child: _loadPhase == _MediaLoadPhase.loadMore
+            ? Semantics(
+                label: '사진을 더 불러오는 중',
+                liveRegion: true,
+                child: const ExcludeSemantics(
+                  child: SizedBox(
+                    key: Key('chat-media-load-more-loading'),
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            : !_hasMore
+                ? const Text('모든 사진을 불러왔어요.')
+                : const SizedBox.shrink(),
+      ),
+    );
+  }
 }
+
+enum _MediaLoadPhase { idle, initial, refresh, loadMore }
 
 class _MediaTile extends StatefulWidget {
   const _MediaTile({
@@ -221,93 +321,257 @@ class _MediaTile extends StatefulWidget {
 
 class _MediaTileState extends State<_MediaTile> {
   late Future<String> _urlFuture;
+  String? _resolvedUrl;
+  bool _retrying = false;
+  int _imageRevision = 0;
 
   @override
   void initState() {
     super.initState();
-    _urlFuture = widget.resolveUrl(widget.message.imagePath!);
+    _urlFuture = _resolveUrl();
   }
 
-  void _retry() => setState(() {
-        _urlFuture = widget.resolveUrl(widget.message.imagePath!);
-      });
+  @override
+  void didUpdateWidget(covariant _MediaTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.imagePath != widget.message.imagePath ||
+        oldWidget.resolveUrl != widget.resolveUrl) {
+      _resolvedUrl = null;
+      _imageRevision += 1;
+      _urlFuture = _resolveUrl();
+    }
+  }
+
+  Future<String> _resolveUrl() async {
+    final url = (await widget.resolveUrl(widget.message.imagePath!)).trim();
+    if (url.isEmpty) throw StateError('Empty chat image URL');
+    _resolvedUrl = url;
+    return url;
+  }
+
+  Future<void> _retry() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+
+    final previousUrl = _resolvedUrl;
+    if (previousUrl != null) {
+      try {
+        await NetworkImage(previousUrl).evict();
+      } catch (_) {
+        // URL refresh remains useful even if the stale cache entry is absent.
+      }
+    }
+    if (!mounted) return;
+
+    final refreshedFuture = _resolveUrl();
+    setState(() {
+      _resolvedUrl = null;
+      _imageRevision += 1;
+      _urlFuture = refreshedFuture;
+    });
+    try {
+      await refreshedFuture;
+    } catch (_) {
+      // FutureBuilder exposes the refreshed failure with the same retry action.
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
+
+  void _openImage(String url, String heroTag) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatImageViewPage(
+          imageUrl: url,
+          heroTag: heroTag,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final heroTag = 'chat-media-${widget.message.id}';
+    final dateLabel = chatDateLabel(widget.message.createdAt);
     return FutureBuilder<String>(
       future: _urlFuture,
       builder: (context, snapshot) {
-        final url = snapshot.data;
-        return Semantics(
-          button: url != null,
-          label: '${chatDateLabel(widget.message.createdAt)}에 주고받은 사진',
-          child: Material(
-            key: ValueKey<String>('chat-media-${widget.message.id}'),
-            color: DearColors.blush,
-            borderRadius: BorderRadius.circular(DearRadii.small),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: url == null
-                  ? (snapshot.hasError ? _retry : null)
-                  : () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ChatImageViewPage(
-                            imageUrl: url,
-                            heroTag: heroTag,
-                          ),
-                        ),
-                      ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (url != null)
-                    Hero(
-                      tag: heroTag,
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.broken_image_outlined,
-                          color: DearColors.disabled,
-                        ),
-                      ),
-                    )
-                  else if (snapshot.hasError)
-                    const Icon(
-                      Icons.refresh_rounded,
-                      color: DearColors.secondary,
-                    )
-                  else
-                    const Center(
-                      child: SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  Positioned(
-                    left: 5,
-                    right: 5,
-                    bottom: 4,
-                    child: Text(
-                      chatDateLabel(widget.message.createdAt),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white,
-                        shadows: const [
-                          Shadow(color: Colors.black87, blurRadius: 5),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+        Widget child;
+        if (snapshot.connectionState != ConnectionState.done) {
+          child = _MediaLoadingFrame(
+            dateLabel: dateLabel,
+            retrying: _retrying,
+          );
+        } else if (snapshot.hasError || snapshot.data == null) {
+          child = _MediaRetryFrame(
+            messageId: widget.message.id,
+            dateLabel: dateLabel,
+            retrying: _retrying,
+            onRetry: _retry,
+          );
+        } else {
+          final url = snapshot.data!;
+          child = Image.network(
+            url,
+            key: ValueKey<String>(
+              'chat-media-network-image-${widget.message.id}-$_imageRevision',
             ),
-          ),
+            fit: BoxFit.cover,
+            excludeFromSemantics: true,
+            frameBuilder: (context, image, frame, synchronous) {
+              if (!synchronous && frame == null) {
+                return _MediaLoadingFrame(dateLabel: dateLabel);
+              }
+              return Semantics(
+                button: true,
+                label: '$dateLabel에 주고받은 사진',
+                onTap: () => _openImage(url, heroTag),
+                excludeSemantics: true,
+                child: InkWell(
+                  onTap: () => _openImage(url, heroTag),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Hero(tag: heroTag, child: image),
+                      _MediaDateOverlay(dateLabel: dateLabel),
+                    ],
+                  ),
+                ),
+              );
+            },
+            errorBuilder: (_, __, ___) => _MediaRetryFrame(
+              messageId: widget.message.id,
+              dateLabel: dateLabel,
+              retrying: _retrying,
+              onRetry: _retry,
+            ),
+          );
+        }
+
+        return Material(
+          key: ValueKey<String>('chat-media-${widget.message.id}'),
+          color: DearColors.blush,
+          borderRadius: BorderRadius.circular(DearRadii.small),
+          clipBehavior: Clip.antiAlias,
+          child: child,
         );
       },
+    );
+  }
+}
+
+class _MediaLoadingFrame extends StatelessWidget {
+  const _MediaLoadingFrame({
+    required this.dateLabel,
+    this.retrying = false,
+  });
+
+  final String dateLabel;
+  final bool retrying;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = retrying ? '사진을 다시 불러오는 중' : '사진을 불러오는 중';
+    return Semantics(
+      label: label,
+      liveRegion: retrying,
+      child: ExcludeSemantics(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+            _MediaDateOverlay(dateLabel: dateLabel),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MediaRetryFrame extends StatelessWidget {
+  const _MediaRetryFrame({
+    required this.messageId,
+    required this.dateLabel,
+    required this.retrying,
+    required this.onRetry,
+  });
+
+  final int messageId;
+  final String dateLabel;
+  final bool retrying;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Center(
+          child: Semantics(
+            key: ValueKey<String>('chat-media-image-retry-$messageId'),
+            container: true,
+            button: true,
+            enabled: !retrying,
+            liveRegion: retrying,
+            label: retrying ? '사진 다시 불러오는 중' : '사진 다시 불러오기',
+            onTap: retrying ? null : onRetry,
+            excludeSemantics: true,
+            child: TextButton.icon(
+              onPressed: retrying ? null : onRetry,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(
+                  DearTouchTargets.minimum,
+                  DearTouchTargets.minimum,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: retrying
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(retrying ? '불러오는 중' : '다시 시도'),
+            ),
+          ),
+        ),
+        _MediaDateOverlay(dateLabel: dateLabel),
+      ],
+    );
+  }
+}
+
+class _MediaDateOverlay extends StatelessWidget {
+  const _MediaDateOverlay({required this.dateLabel});
+
+  final String dateLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 5,
+      right: 5,
+      bottom: 4,
+      child: ExcludeSemantics(
+        child: Text(
+          dateLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Colors.white,
+            shadows: const [
+              Shadow(color: Colors.black87, blurRadius: 5),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
