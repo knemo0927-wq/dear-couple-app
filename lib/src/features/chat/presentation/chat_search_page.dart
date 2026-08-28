@@ -23,9 +23,11 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
   final ScrollController _scrollController = ScrollController();
   Timer? _debounce;
   List<ChatMessage> _results = const <ChatMessage>[];
-  String _searchedQuery = '';
+  String? _snapshotQuery;
   int _selectedIndex = -1;
+  int _requestGeneration = 0;
   bool _loading = false;
+  bool _retrying = false;
   String? _error;
 
   @override
@@ -38,6 +40,7 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
 
   @override
   void dispose() {
+    _requestGeneration++;
     _debounce?.cancel();
     _controller.dispose();
     _focusNode.dispose();
@@ -47,50 +50,55 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
 
   void _scheduleSearch(String value) {
     _debounce?.cancel();
+    _requestGeneration++;
     final query = value.trim();
-    if (query.isEmpty) {
-      setState(() {
+    setState(() {
+      _loading = false;
+      _retrying = false;
+      _error = null;
+      if (query.isEmpty) {
         _results = const <ChatMessage>[];
-        _searchedQuery = '';
+        _snapshotQuery = null;
         _selectedIndex = -1;
-        _loading = false;
-        _error = null;
-      });
+      }
+    });
+    if (query.isEmpty) {
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 300), _search);
   }
 
-  Future<void> _search() async {
+  Future<void> _search({bool retry = false}) async {
     final query = _controller.text.trim();
     if (query.isEmpty) return;
+    final requestGeneration = ++_requestGeneration;
+    final keepInlineError = retry && _snapshotQuery != null && _error != null;
     setState(() {
       _loading = true;
-      _error = null;
+      _retrying = keepInlineError;
+      if (!keepInlineError) _error = null;
     });
     try {
       final results = await ref.read(chatSearchMessagesProvider)(
         coupleId: widget.coupleId,
         query: query,
       );
-      if (!mounted || query != _controller.text.trim()) return;
+      if (!mounted || requestGeneration != _requestGeneration) return;
       setState(() {
-        _results = results;
-        _searchedQuery = query;
+        _results = List<ChatMessage>.unmodifiable(results);
+        _snapshotQuery = query;
         _selectedIndex = results.isEmpty ? -1 : 0;
+        _loading = false;
+        _retrying = false;
+        _error = null;
       });
     } catch (error) {
-      if (!mounted || query != _controller.text.trim()) return;
+      if (!mounted || requestGeneration != _requestGeneration) return;
       setState(() {
-        _results = const <ChatMessage>[];
-        _searchedQuery = query;
-        _selectedIndex = -1;
+        _loading = false;
+        _retrying = false;
         _error = toFriendlyErrorMessage(error);
       });
-    } finally {
-      if (mounted && query == _controller.text.trim()) {
-        setState(() => _loading = false);
-      }
     }
   }
 
@@ -116,6 +124,8 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
   @override
   Widget build(BuildContext context) {
     final myUserId = ref.watch(chatCurrentUserIdProvider);
+    final currentInput = _controller.text.trim();
+    final snapshotQuery = _snapshotQuery;
     return Scaffold(
       appBar: AppBar(title: const Text('메시지 검색')),
       body: DearBackground(
@@ -140,30 +150,38 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
                       icon: const Icon(Icons.close_rounded),
                     ),
                 ],
-                onChanged: (value) {
-                  setState(() {});
-                  _scheduleSearch(value);
-                },
+                onChanged: _scheduleSearch,
                 onSubmitted: (_) {
                   _debounce?.cancel();
                   _search();
                 },
               ),
             ),
-            if (_results.isNotEmpty && !_loading)
+            if (snapshotQuery != null &&
+                currentInput.isNotEmpty &&
+                _results.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        '${_results.length}개의 결과 · ${_selectedIndex + 1}번째',
-                        semanticsLabel:
-                            '검색 결과 ${_results.length}개 중 ${_selectedIndex + 1}번째',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DearColors.secondary,
-                              fontWeight: FontWeight.w700,
-                            ),
+                      child: Semantics(
+                        liveRegion: true,
+                        label: snapshotQuery == currentInput
+                            ? '검색 결과 ${_results.length}개 중 ${_selectedIndex + 1}번째'
+                            : '$snapshotQuery 이전 검색 결과 ${_results.length}개 중 ${_selectedIndex + 1}번째',
+                        child: ExcludeSemantics(
+                          child: Text(
+                            snapshotQuery == currentInput
+                                ? '${_results.length}개의 결과 · ${_selectedIndex + 1}번째'
+                                : '“$snapshotQuery” 결과 ${_results.length}개 · ${_selectedIndex + 1}번째',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: DearColors.secondary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                          ),
+                        ),
                       ),
                     ),
                     IconButton(
@@ -185,14 +203,15 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
             Expanded(
               child: _SearchBody(
                 controller: _scrollController,
-                query: _searchedQuery,
-                currentInput: _controller.text.trim(),
+                snapshotQuery: snapshotQuery,
+                currentInput: currentInput,
                 loading: _loading,
+                retrying: _retrying,
                 error: _error,
                 results: _results,
                 selectedIndex: _selectedIndex,
                 myUserId: myUserId,
-                onRetry: _search,
+                onRetry: () => _search(retry: true),
                 onSelect: (index) => setState(() => _selectedIndex = index),
               ),
             ),
@@ -206,9 +225,10 @@ class _ChatSearchPageState extends ConsumerState<ChatSearchPage> {
 class _SearchBody extends StatelessWidget {
   const _SearchBody({
     required this.controller,
-    required this.query,
+    required this.snapshotQuery,
     required this.currentInput,
     required this.loading,
+    required this.retrying,
     required this.error,
     required this.results,
     required this.selectedIndex,
@@ -218,9 +238,10 @@ class _SearchBody extends StatelessWidget {
   });
 
   final ScrollController controller;
-  final String query;
+  final String? snapshotQuery;
   final String currentInput;
   final bool loading;
+  final bool retrying;
   final String? error;
   final List<ChatMessage> results;
   final int selectedIndex;
@@ -230,28 +251,179 @@ class _SearchBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('대화를 찾고 있어요...'),
-          ],
-        ),
+    if (currentInput.isEmpty) {
+      return const _SearchEmptyState(
+        icon: Icons.manage_search_rounded,
+        title: '찾고 싶은 대화를 입력해 주세요',
+        description: '메시지 내용에서 검색해요.',
       );
     }
-    if (error != null) {
-      return Center(
+
+    final query = snapshotQuery;
+    if (query == null) {
+      if (loading) {
+        return const Center(
+          child: DearLoadingState(label: '대화를 찾고 있어요...'),
+        );
+      }
+      if (error != null) {
+        return _SearchBlockingError(error: error!, onRetry: onRetry);
+      }
+      return const _SearchEmptyState(
+        icon: Icons.manage_search_rounded,
+        title: '검색을 준비하고 있어요',
+        description: '입력을 멈추면 대화에서 자동으로 찾아요.',
+      );
+    }
+
+    final showingPreviousQuery = query != currentInput;
+    final content = results.isEmpty
+        ? _SearchEmptyState(
+            key: const Key('chat-search-empty-success'),
+            icon: Icons.chat_bubble_outline_rounded,
+            title: showingPreviousQuery ? '“$query” 검색 결과가 없어요' : '검색 결과가 없어요',
+            description: '다른 검색어로 다시 찾아보세요.',
+            liveRegion: !loading && error == null && !showingPreviousQuery,
+            semanticLabel: '$query 검색 결과 없음',
+          )
+        : ListView.separated(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            itemCount: results.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final message = results[index];
+              final selected = index == selectedIndex;
+              return Semantics(
+                selected: selected,
+                button: true,
+                label: '${index + 1}번째 검색 결과',
+                child: DearCard(
+                  key: ValueKey<String>('chat-search-result-${message.id}'),
+                  padding: EdgeInsets.zero,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(DearRadii.large),
+                    onTap: () => onSelect(index),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? DearColors.coralSoft
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(DearRadii.large),
+                        border: selected
+                            ? Border.all(
+                                color: DearColors.coral.withValues(alpha: .5),
+                              )
+                            : null,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                message.senderId == myUserId ? '나' : '상대',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(
+                                      color: DearColors.coralText,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '${chatDateLabel(message.createdAt)} ${chatTimeLabel(message.createdAt)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: DearColors.secondary,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          _HighlightedText(
+                              text: message.body ?? '', query: query),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: DearInlineError(
+              key: const Key('chat-search-inline-error'),
+              message: error!,
+              onRetry: onRetry,
+              retrying: retrying,
+            ),
+          )
+        else if (loading)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: DearInlineLoading(
+              key: const Key('chat-search-inline-loading'),
+              label: '“$currentInput” 대화를 찾고 있어요...',
+            ),
+          ),
+        if (showingPreviousQuery)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Semantics(
+              key: const Key('chat-search-preserved-query'),
+              container: true,
+              liveRegion: true,
+              label: '현재 검색어는 $currentInput입니다. $query 이전 검색 결과를 유지하고 있습니다.',
+              child: ExcludeSemantics(
+                child: Text(
+                  '현재 “$currentInput” 검색 중 · “$query” 이전 결과 표시',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DearColors.secondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ),
+          ),
+        Expanded(child: content),
+      ],
+    );
+  }
+}
+
+class _SearchBlockingError extends StatelessWidget {
+  const _SearchBlockingError({required this.error, required this.onRetry});
+
+  final String error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Center(
         child: DearCard(
           margin: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.search_off_rounded, size: 42),
+              const ExcludeSemantics(
+                child: Icon(Icons.search_off_rounded, size: 42),
+              ),
               const SizedBox(height: 10),
-              Text(error!, textAlign: TextAlign.center),
+              Text(error, textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: onRetry,
@@ -261,82 +433,7 @@ class _SearchBody extends StatelessWidget {
             ],
           ),
         ),
-      );
-    }
-    if (currentInput.isEmpty) {
-      return const _SearchEmptyState(
-        icon: Icons.manage_search_rounded,
-        title: '찾고 싶은 대화를 입력해 주세요',
-        description: '메시지 내용에서 검색해요.',
-      );
-    }
-    if (results.isEmpty && query == currentInput) {
-      return const _SearchEmptyState(
-        icon: Icons.chat_bubble_outline_rounded,
-        title: '검색 결과가 없어요',
-        description: '다른 검색어로 다시 찾아보세요.',
-      );
-    }
-    return ListView.separated(
-      controller: controller,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: results.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final message = results[index];
-        final selected = index == selectedIndex;
-        return Semantics(
-          selected: selected,
-          button: true,
-          label: '${index + 1}번째 검색 결과',
-          child: DearCard(
-            key: ValueKey<String>('chat-search-result-${message.id}'),
-            padding: EdgeInsets.zero,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(DearRadii.large),
-              onTap: () => onSelect(index),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: selected ? DearColors.coralSoft : Colors.transparent,
-                  borderRadius: BorderRadius.circular(DearRadii.large),
-                  border: selected
-                      ? Border.all(
-                          color: DearColors.coral.withValues(alpha: .5))
-                      : null,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          message.senderId == myUserId ? '나' : '상대',
-                          style:
-                              Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: DearColors.coralText,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${chatDateLabel(message.createdAt)} ${chatTimeLabel(message.createdAt)}',
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: DearColors.secondary,
-                                  ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    _HighlightedText(text: message.body ?? '', query: query),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      ),
     );
   }
 }
@@ -391,15 +488,20 @@ class _SearchEmptyState extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.description,
+    this.liveRegion = false,
+    this.semanticLabel,
+    super.key,
   });
 
   final IconData icon;
   final String title;
   final String description;
+  final bool liveRegion;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    final content = Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -426,6 +528,13 @@ class _SearchEmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+    if (!liveRegion) return content;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: semanticLabel ?? '$title. $description',
+      child: ExcludeSemantics(child: content),
     );
   }
 }
