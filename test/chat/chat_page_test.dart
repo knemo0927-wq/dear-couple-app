@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_providers.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_repository.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_page.dart';
@@ -73,6 +74,77 @@ Future<void> _pickMultiplePhotos(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('다크 테마에서 작성창과 수신 메시지는 의미 역할 색을 사용한다', (tester) async {
+    final darkTheme = AppTheme.dark();
+    final scheme = darkTheme.colorScheme;
+    final message = ChatMessage(
+      id: 901,
+      coupleId: coupleId,
+      senderId: 'user-2',
+      body: '다크 모드에서도 또렷한 메시지',
+      imagePath: null,
+      createdAt: DateTime(2026, 8, 29, 21, 10),
+      heartCount: 0,
+      isHeartedByMe: false,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatWatchMessagesProvider.overrideWithValue(
+            (_) => Stream<List<ChatMessage>>.value([message]),
+          ),
+          chatCurrentUserIdProvider.overrideWithValue('user-1'),
+          chatMarkReadProvider.overrideWithValue(({
+            required coupleId,
+            required lastReadMessageId,
+            required lastReadAt,
+          }) async {}),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: darkTheme,
+          themeMode: ThemeMode.dark,
+          home: const Scaffold(body: ChatPage(coupleId: coupleId)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final composer = tester.widget<Container>(
+      find.byKey(const Key('chat-composer-surface')),
+    );
+    final composerDecoration = composer.decoration! as BoxDecoration;
+    final composerBorder = composerDecoration.border! as Border;
+    expect(composerDecoration.color, scheme.surface);
+    expect(composerBorder.top.color, scheme.outline);
+
+    final input = tester.widget<TextField>(find.byType(TextField));
+    expect(input.style?.color, scheme.onSurface);
+    expect(input.decoration?.hintStyle?.color, scheme.onSurfaceVariant);
+
+    final receivedBubble = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey<String>('chat-message-bubble-901')),
+    );
+    final bubbleDecoration = receivedBubble.decoration as BoxDecoration;
+    expect(bubbleDecoration.color, scheme.surface);
+    expect(bubbleDecoration.gradient, isNull);
+
+    final body = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('chat-message-body-901')),
+    );
+    final time = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('chat-message-time-901')),
+    );
+    expect(body.style?.color, scheme.onSurface);
+    expect(time.style?.color, scheme.onSurfaceVariant);
+
+    await tester.pumpWidget(const SizedBox());
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+  });
+
   testWidgets('텍스트 전송 실패 시 다시 시도 버튼이 노출되고 재시도에 성공하면 사라진다', (tester) async {
     var sendCount = 0;
 

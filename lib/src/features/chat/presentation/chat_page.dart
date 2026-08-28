@@ -812,6 +812,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final myUserId = ref.watch(chatCurrentUserIdProvider);
     final avatarUrlMapAsync =
         ref.watch(coupleAvatarUrlMapProvider(widget.coupleId));
@@ -911,7 +912,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                                 .textTheme
                                 .titleMedium
                                 ?.copyWith(
-                                  color: DearColors.ink,
+                                  color: scheme.onSurface,
                                   fontWeight: FontWeight.w900,
                                 ),
                           ),
@@ -921,7 +922,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                             textAlign: TextAlign.center,
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: DearColors.muted,
+                                      color: scheme.onSurfaceVariant,
                                     ),
                           ),
                         ],
@@ -1016,9 +1017,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
                             child: Center(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.84),
+                                  color: scheme.surfaceContainerHigh
+                                      .withValues(alpha: 0.84),
                                   borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: DearColors.line),
+                                  border:
+                                      Border.all(color: scheme.outlineVariant),
                                 ),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -1031,7 +1034,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                                         .textTheme
                                         .bodySmall
                                         ?.copyWith(
-                                          color: DearColors.secondary,
+                                          color: scheme.onSurfaceVariant,
                                           fontWeight: FontWeight.w700,
                                         ),
                                   ),
@@ -1160,16 +1163,16 @@ class _ChatPageState extends ConsumerState<ChatPage>
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
                 decoration: BoxDecoration(
-                  color: DearColors.blush,
+                  color: scheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(DearRadii.medium),
-                  border: Border.all(color: DearColors.line),
+                  border: Border.all(color: scheme.outlineVariant),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.reply_rounded,
                       size: 18,
-                      color: DearColors.coralText,
+                      color: scheme.primary,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -1182,7 +1185,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                                 .textTheme
                                 .labelMedium
                                 ?.copyWith(
-                                  color: DearColors.coralText,
+                                  color: scheme.primary,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -1210,9 +1213,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.94),
+                  color: scheme.surface,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: DearColors.line),
+                  border: Border.all(color: scheme.outlineVariant),
                   boxShadow: dearSoftShadow(0.35),
                 ),
                 child: Padding(
@@ -1225,7 +1228,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                             ? '이미지 미리보기 (${_pendingImage!.extension.toUpperCase()})'
                             : '선택한 사진 ${_pendingImages.length}장',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: DearColors.ink,
+                              color: scheme.onSurface,
                               fontWeight: FontWeight.w900,
                             ),
                       ),
@@ -1235,7 +1238,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                             ? '${_pendingImage!.extension.toUpperCase()} · ${formatImageSizeLabel(pendingBytes)}'
                             : '합계 ${formatImageSizeLabel(pendingBytes)} · 최대 10장',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: DearColors.secondary,
+                              color: scheme.onSurfaceVariant,
                             ),
                       ),
                       if (hasLargePending)
@@ -1276,11 +1279,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
                                       errorBuilder:
                                           (context, error, stackTrace) {
                                         return Container(
-                                          color: DearColors.blush,
+                                          color: scheme.surfaceContainerHigh,
                                           alignment: Alignment.center,
-                                          child: const Icon(
+                                          child: Icon(
                                             Icons.image_not_supported_outlined,
-                                            color: DearColors.disabled,
+                                            color: scheme.onSurfaceVariant,
                                           ),
                                         );
                                       },
@@ -1300,7 +1303,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                                         height: 44,
                                         child: Center(
                                           child: Material(
-                                            color: DearColors.ink.withValues(
+                                            color: scheme.scrim.withValues(
                                               alpha: 0.72,
                                             ),
                                             shape: const CircleBorder(),
@@ -1424,7 +1427,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                 child: Text(
                   '이미지 업로드 중...',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DearColors.secondary,
+                        color: scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -1434,11 +1437,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
             top: false,
             minimum: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Container(
+              key: const Key('chat-composer-surface'),
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.96),
+                color: scheme.surface,
                 borderRadius: BorderRadius.circular(26),
-                border: Border.all(color: DearColors.line),
+                border: Border.all(color: scheme.outline),
                 boxShadow: dearSoftShadow(0.45),
               ),
               child: Row(
@@ -1449,10 +1453,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
                     onPressed: _sending ? null : _showPhotoAttachmentSheet,
                     icon: const Icon(Icons.add_rounded),
                     iconSize: DearIconSizes.medium,
-                    color: DearColors.coralText,
+                    color: scheme.primary,
                     style: IconButton.styleFrom(
-                      backgroundColor: DearColors.coralSoft,
-                      disabledBackgroundColor: DearColors.blush,
+                      backgroundColor: scheme.primaryContainer,
+                      disabledBackgroundColor: scheme.surfaceContainerHighest,
                       shape: const CircleBorder(),
                     ),
                   ),
@@ -1465,11 +1469,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
                       minLines: 1,
                       maxLines: 4,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: DearColors.ink,
+                            color: scheme.onSurface,
                           ),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: '메시지 입력...',
-                        hintStyle: TextStyle(color: DearColors.placeholder),
+                        hintStyle: TextStyle(color: scheme.onSurfaceVariant),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
@@ -1499,8 +1503,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
                         style: FilledButton.styleFrom(
                           backgroundColor: DearColors.coralText,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: const Color(0xFFF3E7EC),
-                          disabledForegroundColor: DearColors.disabled,
+                          disabledBackgroundColor:
+                              scheme.surfaceContainerHighest,
+                          disabledForegroundColor: scheme.onSurfaceVariant,
                           shape: const CircleBorder(),
                           padding: EdgeInsets.zero,
                         ),
@@ -1600,6 +1605,7 @@ class _OptimisticTextBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final failed = message.status == _OptimisticSendStatus.failed;
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       label: failed ? '전송 실패한 내 메시지' : '전송 중인 내 메시지',
       child: Align(
@@ -1619,7 +1625,7 @@ class _OptimisticTextBubble extends StatelessWidget {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: DearColors.coralSoft,
+                  color: scheme.primaryContainer,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(20),
                     topRight: Radius.circular(20),
@@ -1627,9 +1633,7 @@ class _OptimisticTextBubble extends StatelessWidget {
                     bottomRight: Radius.circular(6),
                   ),
                   border: Border.all(
-                    color: failed
-                        ? Theme.of(context).colorScheme.error
-                        : DearColors.line,
+                    color: failed ? scheme.error : scheme.outlineVariant,
                   ),
                 ),
                 child: Column(
@@ -1639,7 +1643,10 @@ class _OptimisticTextBubble extends StatelessWidget {
                       _ReplyPreview(text: message.replyPreview!),
                       const SizedBox(height: 7),
                     ],
-                    Text(message.text),
+                    Text(
+                      message.text,
+                      style: TextStyle(color: scheme.onPrimaryContainer),
+                    ),
                   ],
                 ),
               ),
@@ -1650,17 +1657,14 @@ class _OptimisticTextBubble extends StatelessWidget {
                   Icon(
                     failed ? Icons.error_outline_rounded : Icons.schedule,
                     size: 13,
-                    color: failed
-                        ? Theme.of(context).colorScheme.error
-                        : DearColors.secondary,
+                    color: failed ? scheme.error : scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 3),
                   Text(
                     '${failed ? '전송 실패' : '전송 중'} · ${chatTimeLabel(message.sentAt)}',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: failed
-                              ? Theme.of(context).colorScheme.error
-                              : DearColors.secondary,
+                          color:
+                              failed ? scheme.error : scheme.onSurfaceVariant,
                         ),
                   ),
                 ],
@@ -1714,6 +1718,7 @@ class _ChatLoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Semantics(
       label: '채팅 불러오는 중',
       child: ListView.separated(
@@ -1729,9 +1734,9 @@ class _ChatLoadingSkeleton extends StatelessWidget {
               width: MediaQuery.sizeOf(context).width * (mine ? .52 : .64),
               height: index % 3 == 0 ? 72 : 44,
               decoration: BoxDecoration(
-                color: mine ? DearColors.coralSoft : Colors.white,
+                color: mine ? scheme.primaryContainer : scheme.surface,
                 borderRadius: BorderRadius.circular(DearRadii.large),
-                border: Border.all(color: DearColors.line),
+                border: Border.all(color: scheme.outlineVariant),
               ),
             ),
           );
@@ -1748,14 +1753,15 @@ class _ReplyPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .58),
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(DearRadii.small),
-        border: const Border(
-          left: BorderSide(color: DearColors.coralText, width: 3),
+        border: Border(
+          left: BorderSide(color: scheme.primary, width: 3),
         ),
       ),
       child: Text(
@@ -1763,7 +1769,7 @@ class _ReplyPreview extends StatelessWidget {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: DearColors.secondary,
+              color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
             ),
       ),
@@ -1794,6 +1800,7 @@ class _ChatBubbleContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
@@ -1807,15 +1814,19 @@ class _ChatBubbleContent extends StatelessWidget {
                 maxWidth: MediaQuery.sizeOf(context).width * 0.72,
               ),
               child: DecoratedBox(
+                key: ValueKey<String>('chat-message-bubble-${message.id}'),
                 decoration: BoxDecoration(
                   gradient: isMine
-                      ? const LinearGradient(
-                          colors: [DearColors.blushDeep, DearColors.coralSoft],
+                      ? LinearGradient(
+                          colors: [
+                            scheme.primaryContainer,
+                            scheme.secondaryContainer,
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         )
                       : null,
-                  color: isMine ? null : Colors.white,
+                  color: isMine ? null : scheme.surface,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(20),
                     topRight: const Radius.circular(20),
@@ -1823,14 +1834,14 @@ class _ChatBubbleContent extends StatelessWidget {
                     bottomRight: Radius.circular(isMine ? 6 : 20),
                   ),
                   border: Border.all(
-                    color: DearColors.line,
+                    color: scheme.outlineVariant,
                     width: 0.7,
                   ),
                   boxShadow: [
                     BoxShadow(
                       blurRadius: 14,
                       offset: const Offset(0, 3),
-                      color: DearColors.shadow.withValues(alpha: 0.06),
+                      color: scheme.shadow.withValues(alpha: 0.06),
                     ),
                   ],
                 ),
@@ -1853,9 +1864,14 @@ class _ChatBubbleContent extends StatelessWidget {
                         const SizedBox(height: 7),
                       ],
                       Text(
+                        key: ValueKey<String>(
+                          'chat-message-body-${message.id}',
+                        ),
                         message.body!,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: DearColors.ink,
+                              color: isMine
+                                  ? scheme.onPrimaryContainer
+                                  : scheme.onSurface,
                               height: 1.35,
                             ),
                       ),
@@ -1949,7 +1965,8 @@ class _OtherSenderMessageCluster extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: DearColors.secondary,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -2060,10 +2077,12 @@ class _MessageMetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final time = Text(
+      key: ValueKey<String>('chat-message-time-$messageId'),
       timeLabel,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: DearColors.secondary,
+            color: scheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
           ),
     );
@@ -2081,8 +2100,8 @@ class _MessageMetaRow extends StatelessWidget {
             deliveryLabel!,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: deliveryLabel == '읽음'
-                      ? DearColors.coralText
-                      : DearColors.secondary,
+                      ? scheme.primary
+                      : scheme.onSurfaceVariant,
                   fontWeight: FontWeight.w700,
                 ),
           );
@@ -2094,8 +2113,8 @@ class _MessageMetaRow extends StatelessWidget {
         child: Wrap(
           alignment: isMine ? WrapAlignment.end : WrapAlignment.start,
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 6,
-          runSpacing: 2,
+          spacing: 8,
+          runSpacing: 8,
           children: isMine
               ? [
                   if (delivery != null) delivery,
@@ -2162,7 +2181,8 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
 
   @override
   Widget build(BuildContext context) {
-    const activeColor = DearColors.coral;
+    final scheme = Theme.of(context).colorScheme;
+    final activeColor = scheme.primary;
     const iconSize = 15.0;
     const horizontalPadding = 7.0;
     const verticalPadding = 3.0;
@@ -2213,7 +2233,7 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
                   decoration: BoxDecoration(
                     color: widget.isActive
                         ? activeColor.withValues(alpha: 0.18)
-                        : DearColors.blush.withValues(alpha: 0.82),
+                        : scheme.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(999),
                     border: widget.isActive
                         ? Border.all(
@@ -2232,7 +2252,7 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
                         size: iconSize,
                         color: widget.isActive
                             ? activeColor
-                            : DearColors.secondary,
+                            : scheme.onSurfaceVariant,
                       ),
                       if (widget.count > 0) ...[
                         const SizedBox(width: 3),
@@ -2240,7 +2260,9 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
                           '${widget.count}',
                           style:
                               Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: DearColors.secondary,
+                                    color: widget.isActive
+                                        ? activeColor
+                                        : scheme.onSurfaceVariant,
                                     fontWeight: widget.isActive
                                         ? FontWeight.w700
                                         : FontWeight.w500,
@@ -2306,7 +2328,7 @@ class _MessageImageMosaic extends StatelessWidget {
               child: Text(
                 chatTimeLabel(messages.last.createdAt),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: DearColors.secondary,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontWeight: isMine ? FontWeight.w600 : FontWeight.w500,
                     ),
               ),
@@ -2440,7 +2462,8 @@ class _MessageImageState extends ConsumerState<_MessageImage> {
                     child: Text(
                       chatTimeLabel(widget.sentAt),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: DearColors.secondary,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                             fontWeight: widget.isMine
                                 ? FontWeight.w600
                                 : FontWeight.w500,
@@ -2471,16 +2494,17 @@ class _StableNetworkImageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final placeholder = DecoratedBox(
       decoration: BoxDecoration(
-        color: DearColors.blush,
-        border: Border.all(color: DearColors.line),
+        color: scheme.surfaceContainerHigh,
+        border: Border.all(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Center(
         child: Icon(
           Icons.image_rounded,
-          color: DearColors.coral.withValues(alpha: 0.6),
+          color: scheme.primary.withValues(alpha: 0.6),
           size: 30,
         ),
       ),
@@ -2504,12 +2528,14 @@ class _StableNetworkImageFrame extends StatelessWidget {
                     filterQuality: FilterQuality.medium,
                     loadingBuilder: (context, child, loadingProgress) => child,
                     errorBuilder: (context, error, stackTrace) {
-                      return const DecoratedBox(
-                        decoration: BoxDecoration(color: DearColors.blush),
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                        ),
                         child: Center(
                           child: Icon(
                             Icons.broken_image_outlined,
-                            color: DearColors.disabled,
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                       );
