@@ -91,6 +91,96 @@ void main() {
         ],
       );
 
+  OmokSessionInfo gameSession({
+    String currentTurnUserId = 'user-1',
+    String status = 'playing',
+    String? winnerUserId,
+  }) {
+    return OmokSessionInfo(
+      id: 'accessible-game',
+      coupleId: 'couple-1',
+      blackUserId: 'user-1',
+      whiteUserId: 'user-2',
+      currentTurnUserId: status == 'playing' ? currentTurnUserId : null,
+      status: status,
+      winnerUserId: winnerUserId,
+      turnExpiresAt: status == 'playing'
+          ? DateTime.now().add(const Duration(minutes: 5))
+          : null,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  Future<void> pumpAccessibleGame(
+    WidgetTester tester, {
+    required Stream<OmokSessionInfo?> sessionStream,
+    required Stream<List<OmokMove>> movesStream,
+    PlaceOmokMoveAction? placeMove,
+    Size size = const Size(390, 844),
+    double textScale = 1,
+    double bottomInset = 0,
+    bool disableAnimations = false,
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final effectivePlaceMove = placeMove ??
+        ({required sessionId, required x, required y}) async =>
+            const OmokMoveResult(
+              status: 'playing',
+              nextTurnUserId: 'user-2',
+              winnerUserId: null,
+              turnExpiresAt: null,
+            );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myProfileProvider.overrideWith((ref) async => profile),
+          omokSessionProvider.overrideWith(
+            (ref, sessionId) => sessionStream,
+          ),
+          omokMovesProvider.overrideWith(
+            (ref, sessionId) => movesStream,
+          ),
+          placeOmokMoveProvider.overrideWithValue(effectivePlaceMove),
+          rematchNotificationsProvider.overrideWith(
+            (ref, userId) => const Stream<List<OmokNotification>>.empty(),
+          ),
+        ],
+        child: MaterialApp(
+          builder: (context, child) {
+            final media = MediaQuery.of(context);
+            return MediaQuery(
+              data: media.copyWith(
+                textScaler: TextScaler.linear(textScale),
+                padding: EdgeInsets.only(bottom: bottomInset),
+                viewPadding: EdgeInsets.only(bottom: bottomInset),
+                disableAnimations: disableAnimations,
+              ),
+              child: child!,
+            );
+          },
+          home: const OmokGamePage(sessionId: 'accessible-game'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> selectCoordinate(
+    WidgetTester tester,
+    Key dropdownKey,
+    int value,
+  ) async {
+    await tester.tap(find.byKey(dropdownKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('$value').last);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('메인 더보기가 규칙·전체 기록·새로고침 액션을 제공한다', (tester) async {
     configurePhone(tester);
     final router = dashboardRouter();
@@ -296,6 +386,283 @@ void main() {
     expect(find.text('기권하기'), findsOneWidget);
     expect(find.text('오목 규칙'), findsOneWidget);
     expect(find.text('재대결 신청'), findsNothing);
+  });
+
+  testWidgets('작은 보드 셀 탭은 좌표 확인을 열고 명시적 확인 뒤 정확한 좌표를 호출한다', (tester) async {
+    final placement = Completer<OmokMoveResult>();
+    var placeCalls = 0;
+    String? capturedSessionId;
+    int? capturedX;
+    int? capturedY;
+
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: Stream.value(gameSession()),
+      movesStream: Stream.value(const <OmokMove>[]),
+      placeMove: ({required sessionId, required x, required y}) {
+        placeCalls += 1;
+        capturedSessionId = sessionId;
+        capturedX = x;
+        capturedY = y;
+        return placement.future;
+      },
+    );
+
+    final coordinateButton =
+        find.byKey(const ValueKey('omok-coordinate-place-button'));
+    expect(coordinateButton, findsOneWidget);
+    expect(tester.getSize(coordinateButton).height, greaterThanOrEqualTo(48));
+    expect(
+      find.byKey(const ValueKey('omok-board-interactive-viewer')),
+      findsOneWidget,
+    );
+    final boardSummary = tester.getSemantics(
+      find.byKey(const ValueKey('omok-board-summary')),
+    );
+    expect(boardSummary.hint, contains('확대하거나 이동'));
+    expect(boardSummary.hint, contains('좌표로 돌 놓기'));
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('omok-board-cell-row-4-column-6'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(placeCalls, 0);
+    expect(find.byKey(const ValueKey('omok-coordinate-sheet')), findsOneWidget);
+    expect(find.text('행'), findsOneWidget);
+    expect(find.text('열'), findsOneWidget);
+    expect(
+      tester
+          .widget<DropdownButton<int>>(
+            find.descendant(
+              of: find.byKey(const ValueKey('omok-coordinate-row')),
+              matching: find.byType(DropdownButton<int>),
+            ),
+          )
+          .items,
+      hasLength(15),
+    );
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(const ValueKey('omok-coordinate-status')),
+          )
+          .label,
+      allOf(contains('4행 6열은 빈칸'), contains('현재 내 차례')),
+    );
+
+    final confirm = find.byKey(const ValueKey('omok-coordinate-confirm'));
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    await tester.tap(confirm);
+    await tester.pump();
+
+    expect(placeCalls, 1);
+    expect(capturedSessionId, 'accessible-game');
+    expect(capturedX, 5);
+    expect(capturedY, 3);
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+    expect(
+      find.descendant(of: confirm, matching: find.text('돌 놓는 중...')),
+      findsOneWidget,
+    );
+
+    placement.complete(
+      const OmokMoveResult(
+        status: 'playing',
+        nextTurnUserId: 'user-2',
+        winnerUserId: null,
+        turnExpiresAt: null,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('omok-coordinate-sheet')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('선택 좌표의 흑돌·백돌을 live 안내하고 occupied 확인을 비활성화한다', (tester) async {
+    final moves = [
+      OmokMove(
+        id: 1,
+        sessionId: 'accessible-game',
+        moveNo: 1,
+        userId: 'user-1',
+        stone: 'black',
+        x: 7,
+        y: 7,
+        createdAt: DateTime.now(),
+      ),
+      OmokMove(
+        id: 2,
+        sessionId: 'accessible-game',
+        moveNo: 2,
+        userId: 'user-2',
+        stone: 'white',
+        x: 4,
+        y: 4,
+        createdAt: DateTime.now(),
+      ),
+    ];
+    var placeCalls = 0;
+
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: Stream.value(gameSession()),
+      movesStream: Stream.value(moves),
+      placeMove: ({required sessionId, required x, required y}) async {
+        placeCalls += 1;
+        return const OmokMoveResult(
+          status: 'playing',
+          nextTurnUserId: 'user-2',
+          winnerUserId: null,
+          turnExpiresAt: null,
+        );
+      },
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('omok-coordinate-place-button')),
+    );
+    await tester.pumpAndSettle();
+
+    Finder status() => find.byKey(const ValueKey('omok-coordinate-status'));
+    final confirm = find.byKey(const ValueKey('omok-coordinate-confirm'));
+    expect(tester.getSemantics(status()).label, contains('8행 8열은 흑돌'));
+    expect(
+      tester
+          .getSemantics(status())
+          .getSemanticsData()
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+    await selectCoordinate(
+      tester,
+      const ValueKey('omok-coordinate-row'),
+      5,
+    );
+    await selectCoordinate(
+      tester,
+      const ValueKey('omok-coordinate-column'),
+      5,
+    );
+
+    expect(tester.getSemantics(status()).label, contains('5행 5열은 백돌'));
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+    expect(placeCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('열린 좌표 시트가 상대 차례와 종료 이유를 실시간 안내하고 확인을 막는다', (tester) async {
+    final sessions = StreamController<OmokSessionInfo?>.broadcast();
+    final moves = StreamController<List<OmokMove>>.broadcast();
+    addTearDown(sessions.close);
+    addTearDown(moves.close);
+
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: sessions.stream,
+      movesStream: moves.stream,
+    );
+    sessions.add(gameSession());
+    moves.add(const <OmokMove>[]);
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('omok-coordinate-place-button')),
+    );
+    await tester.pumpAndSettle();
+
+    final status = find.byKey(const ValueKey('omok-coordinate-status'));
+    final confirm = find.byKey(const ValueKey('omok-coordinate-confirm'));
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+
+    sessions.add(gameSession(currentTurnUserId: 'user-2'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.getSemantics(status).label, contains('현재 상대 차례'));
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+    sessions.add(
+      gameSession(
+        status: 'white_timeout_win',
+        winnerUserId: 'user-2',
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final endedLabel = tester.getSemantics(status).label;
+    expect(endedLabel, contains('대국이 종료됐습니다'));
+    expect(endedLabel, contains('종료 이유: 시간 초과'));
+    expect(endedLabel, contains('상대가 이겼습니다'));
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('375pt·200% 큰 글자와 bottom safe area에서 보드와 좌표 시트가 재배치된다',
+      (tester) async {
+    await pumpAccessibleGame(
+      tester,
+      size: const Size(375, 844),
+      textScale: 2,
+      bottomInset: 34,
+      disableAnimations: true,
+      sessionStream: Stream.value(gameSession()),
+      movesStream: Stream.value(const <OmokMove>[]),
+    );
+
+    final coordinateButton =
+        find.byKey(const ValueKey('omok-coordinate-place-button'));
+    expect(tester.getSize(coordinateButton).height, greaterThanOrEqualTo(48));
+    expect(tester.getBottomRight(coordinateButton).dy, lessThanOrEqualTo(810));
+    final resignButton = find.widgetWithText(OutlinedButton, '기권');
+    expect(
+      tester.getTopLeft(resignButton).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(find.text('내 차례')).dy),
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(coordinateButton);
+    await tester.pumpAndSettle();
+
+    final sheetPadding = tester.widget<AnimatedPadding>(
+      find.byKey(const ValueKey('omok-coordinate-animated-padding')),
+    );
+    expect(sheetPadding.duration, Duration.zero);
+
+    final row = find.byKey(const ValueKey('omok-coordinate-row'));
+    final column = find.byKey(const ValueKey('omok-coordinate-column'));
+    expect(
+      tester.getTopLeft(column).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(row).dy),
+    );
+
+    final cancel = find.byKey(const ValueKey('omok-coordinate-cancel'));
+    final confirm = find.byKey(const ValueKey('omok-coordinate-confirm'));
+    expect(
+      tester.getTopLeft(confirm).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(cancel).dy),
+    );
+    await tester.scrollUntilVisible(
+      confirm,
+      180,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('omok-coordinate-sheet')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('대국 종료 후 더보기는 재대결과 규칙을 제공한다', (tester) async {

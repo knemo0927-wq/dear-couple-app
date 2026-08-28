@@ -122,15 +122,15 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
     }
   }
 
-  Future<void> _placeStone(
+  Future<bool> _placeStone(
     OmokSessionInfo session,
     int x,
     int y,
     String myUserId,
   ) async {
-    if (_placing) return;
-    if (!session.isPlaying) return;
-    if (session.currentTurnUserId != myUserId) return;
+    if (_placing) return false;
+    if (!session.isPlaying) return false;
+    if (session.currentTurnUserId != myUserId) return false;
 
     setState(() => _placing = true);
     try {
@@ -139,16 +139,39 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
         x: x,
         y: y,
       );
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(toFriendlyErrorMessage(e))),
       );
+      return false;
     } finally {
       if (mounted) {
         setState(() => _placing = false);
       }
     }
+  }
+
+  Future<void> _showCoordinatePicker({
+    required String myUserId,
+    required int initialX,
+    required int initialY,
+  }) async {
+    if (_placing || !mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _OmokCoordinatePickerSheet(
+        sessionId: widget.sessionId,
+        myUserId: myUserId,
+        initialX: initialX,
+        initialY: initialY,
+        onPlace: (session, x, y) => _placeStone(session, x, y, myUserId),
+      ),
+    );
   }
 
   Future<void> _resign(OmokSessionInfo session, String myUserId) async {
@@ -401,44 +424,38 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        isPlayer
-                                            ? (isMyTurn ? '내 차례' : '상대 차례')
-                                            : '관전 모드',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: isMyTurn
-                                                  ? DearColors.coral
-                                                  : DearColors.secondary,
-                                              fontWeight: FontWeight.w900,
+                                _OmokStatusHeader(
+                                  title: isPlayer
+                                      ? (isMyTurn ? '내 차례' : '상대 차례')
+                                      : '관전 모드',
+                                  emphasized: isMyTurn,
+                                  action: !isPlayer
+                                      ? null
+                                      : session.isPlaying
+                                          ? OutlinedButton(
+                                              onPressed: _resigning
+                                                  ? null
+                                                  : () => _resign(
+                                                        session,
+                                                        profile.userId,
+                                                      ),
+                                              child: Text(
+                                                _resigning ? '기권 중...' : '기권',
+                                              ),
+                                            )
+                                          : FilledButton(
+                                              onPressed: _creatingRematch
+                                                  ? null
+                                                  : () => _createRematch(
+                                                        session,
+                                                        profile.userId,
+                                                      ),
+                                              child: Text(
+                                                _creatingRematch
+                                                    ? '재대결 생성 중...'
+                                                    : '재대결',
+                                              ),
                                             ),
-                                      ),
-                                    ),
-                                    if (session.isPlaying && isPlayer)
-                                      OutlinedButton(
-                                        onPressed: _resigning
-                                            ? null
-                                            : () => _resign(
-                                                session, profile.userId),
-                                        child:
-                                            Text(_resigning ? '기권 중...' : '기권'),
-                                      ),
-                                    if (!session.isPlaying && isPlayer)
-                                      FilledButton(
-                                        onPressed: _creatingRematch
-                                            ? null
-                                            : () => _createRematch(
-                                                session, profile.userId),
-                                        child: Text(_creatingRematch
-                                            ? '재대결 생성 중...'
-                                            : '재대결'),
-                                      ),
-                                  ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -493,14 +510,17 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                 excludeSemantics: true,
                                 label: '오목판 요약',
                                 value: boardSummary,
-                                hint: isMyTurn && session.isPlaying
-                                    ? '빈 교차점을 선택해 돌을 놓으세요.'
-                                    : null,
+                                hint: isPlayer && session.isPlaying
+                                    ? '두 손가락으로 확대하거나 이동할 수 있어요. '
+                                        '교차점을 선택해 좌표와 상태를 확인하거나, '
+                                        '보드 아래 좌표로 돌 놓기 버튼을 사용하세요.'
+                                    : '두 손가락으로 확대하거나 이동해 착수 위치를 확인할 수 있어요.',
                                 child: Center(
                                   child: SizedBox(
                                     width: boardWidth,
                                     height: boardWidth,
                                     child: Container(
+                                      clipBehavior: Clip.antiAlias,
                                       decoration: BoxDecoration(
                                         color: DearColors.board,
                                         borderRadius: BorderRadius.circular(24),
@@ -508,126 +528,137 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                             color: DearColors.warmLine),
                                         boxShadow: dearSoftShadow(0.55),
                                       ),
-                                      child: Stack(
-                                        children: [
-                                          Positioned.fill(
-                                            child: CustomPaint(
-                                              painter: _OmokGridPainter(
-                                                boardSize: _boardSize,
-                                                inset: boardInset,
-                                                color: const Color(0xFF8A6337),
+                                      child: InteractiveViewer(
+                                        key: const ValueKey(
+                                            'omok-board-interactive-viewer'),
+                                        minScale: 1,
+                                        maxScale: 4,
+                                        child: Stack(
+                                          children: [
+                                            Positioned.fill(
+                                              child: CustomPaint(
+                                                painter: _OmokGridPainter(
+                                                  boardSize: _boardSize,
+                                                  inset: boardInset,
+                                                  color:
+                                                      const Color(0xFF8A6337),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          ...List.generate(
-                                              _boardSize * _boardSize, (index) {
-                                            final x = index % _boardSize;
-                                            final y = index ~/ _boardSize;
-                                            final key = '$x:$y';
-                                            final stone = stoneByPosition[key];
-                                            final isLastMove =
-                                                lastMove != null &&
-                                                    lastMove.x == x &&
-                                                    lastMove.y == y;
+                                            ...List.generate(
+                                                _boardSize * _boardSize,
+                                                (index) {
+                                              final x = index % _boardSize;
+                                              final y = index ~/ _boardSize;
+                                              final key = '$x:$y';
+                                              final stone =
+                                                  stoneByPosition[key];
+                                              final isLastMove =
+                                                  lastMove != null &&
+                                                      lastMove.x == x &&
+                                                      lastMove.y == y;
 
-                                            final left = boardInset +
-                                                x * spacing -
-                                                (hitSize / 2);
-                                            final top = boardInset +
-                                                y * spacing -
-                                                (hitSize / 2);
+                                              final left = boardInset +
+                                                  x * spacing -
+                                                  (hitSize / 2);
+                                              final top = boardInset +
+                                                  y * spacing -
+                                                  (hitSize / 2);
 
-                                            return Positioned(
-                                              left: left,
-                                              top: top,
-                                              child: GestureDetector(
-                                                behavior:
-                                                    HitTestBehavior.translucent,
-                                                onTap: stone == null &&
-                                                        isPlayer &&
-                                                        isMyTurn
-                                                    ? () => _placeStone(
-                                                          session,
-                                                          x,
-                                                          y,
-                                                          profile.userId,
-                                                        )
-                                                    : null,
-                                                child: SizedBox(
-                                                  width: hitSize,
-                                                  height: hitSize,
-                                                  child: Center(
-                                                    child: stone == null
-                                                        ? null
-                                                        : SizedBox(
-                                                            width:
-                                                                stoneSize + 8,
-                                                            height:
-                                                                stoneSize + 8,
-                                                            child: Stack(
-                                                              alignment:
-                                                                  Alignment
-                                                                      .center,
-                                                              children: [
-                                                                Container(
-                                                                  width:
-                                                                      stoneSize,
-                                                                  height:
-                                                                      stoneSize,
-                                                                  decoration:
-                                                                      BoxDecoration(
-                                                                    shape: BoxShape
-                                                                        .circle,
-                                                                    color: stone ==
-                                                                            'black'
-                                                                        ? Colors
-                                                                            .black
-                                                                        : Colors
-                                                                            .white,
-                                                                    border:
-                                                                        Border
-                                                                            .all(
+                                              return Positioned(
+                                                left: left,
+                                                top: top,
+                                                child: GestureDetector(
+                                                  key: ValueKey(
+                                                    'omok-board-cell-row-${y + 1}-column-${x + 1}',
+                                                  ),
+                                                  behavior: HitTestBehavior
+                                                      .translucent,
+                                                  onTap: isPlayer &&
+                                                          session.isPlaying &&
+                                                          !_placing
+                                                      ? () =>
+                                                          _showCoordinatePicker(
+                                                            myUserId:
+                                                                profile.userId,
+                                                            initialX: x,
+                                                            initialY: y,
+                                                          )
+                                                      : null,
+                                                  child: SizedBox(
+                                                    width: hitSize,
+                                                    height: hitSize,
+                                                    child: Center(
+                                                      child: stone == null
+                                                          ? null
+                                                          : SizedBox(
+                                                              width:
+                                                                  stoneSize + 8,
+                                                              height:
+                                                                  stoneSize + 8,
+                                                              child: Stack(
+                                                                alignment:
+                                                                    Alignment
+                                                                        .center,
+                                                                children: [
+                                                                  Container(
+                                                                    width:
+                                                                        stoneSize,
+                                                                    height:
+                                                                        stoneSize,
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      shape: BoxShape
+                                                                          .circle,
                                                                       color: stone ==
                                                                               'black'
                                                                           ? Colors
                                                                               .black
                                                                           : Colors
-                                                                              .black54,
-                                                                      width: 1,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                if (isLastMove)
-                                                                  Container(
-                                                                    width:
-                                                                        stoneSize +
-                                                                            6,
-                                                                    height:
-                                                                        stoneSize +
-                                                                            6,
-                                                                    decoration:
-                                                                        BoxDecoration(
-                                                                      shape: BoxShape
-                                                                          .circle,
+                                                                              .white,
                                                                       border:
                                                                           Border
                                                                               .all(
-                                                                        color: const Color(
-                                                                            0xFFE678A9),
+                                                                        color: stone ==
+                                                                                'black'
+                                                                            ? Colors.black
+                                                                            : Colors.black54,
                                                                         width:
-                                                                            2,
+                                                                            1,
                                                                       ),
                                                                     ),
                                                                   ),
-                                                              ],
+                                                                  if (isLastMove)
+                                                                    Container(
+                                                                      width:
+                                                                          stoneSize +
+                                                                              6,
+                                                                      height:
+                                                                          stoneSize +
+                                                                              6,
+                                                                      decoration:
+                                                                          BoxDecoration(
+                                                                        shape: BoxShape
+                                                                            .circle,
+                                                                        border:
+                                                                            Border.all(
+                                                                          color:
+                                                                              const Color(0xFFE678A9),
+                                                                          width:
+                                                                              2,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              ),
                                                             ),
-                                                          ),
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                            );
-                                          }),
-                                        ],
+                                              );
+                                            }),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -636,7 +667,34 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                             },
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        if (session.isPlaying && isPlayer)
+                          SafeArea(
+                            top: false,
+                            minimum: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minWidth: double.infinity,
+                                minHeight: DearTouchTargets.comfortable,
+                              ),
+                              child: FilledButton.icon(
+                                key: const ValueKey(
+                                    'omok-coordinate-place-button'),
+                                onPressed: _placing
+                                    ? null
+                                    : () => _showCoordinatePicker(
+                                          myUserId: profile.userId,
+                                          initialX: 7,
+                                          initialY: 7,
+                                        ),
+                                icon: const Icon(Icons.pin_drop_outlined),
+                                label: Text(
+                                  _placing ? '돌 놓는 중...' : '좌표로 돌 놓기',
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 12),
                       ],
                     );
                   },
@@ -696,6 +754,380 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
     return '15 곱하기 15 바둑판, 흑돌 $blackCount개, 백돌 $whiteCount개. '
         '$lastMoveLabel $outcome';
   }
+}
+
+class _OmokStatusHeader extends StatelessWidget {
+  const _OmokStatusHeader({
+    required this.title,
+    required this.emphasized,
+    this.action,
+  });
+
+  final String title;
+  final bool emphasized;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget titleWidget() => Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: emphasized ? DearColors.coralText : DearColors.secondary,
+                fontWeight: FontWeight.w900,
+              ),
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final reflow = MediaQuery.textScalerOf(context).scale(1) >= 1.6 ||
+            constraints.maxWidth < 320;
+        final trailing = action;
+        if (trailing == null) return titleWidget();
+        if (reflow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              titleWidget(),
+              const SizedBox(height: DearSpacing.space8),
+              SizedBox(width: double.infinity, child: trailing),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: titleWidget()),
+            const SizedBox(width: DearSpacing.space8),
+            trailing,
+          ],
+        );
+      },
+    );
+  }
+}
+
+typedef _PlaceOmokCoordinate = Future<bool> Function(
+  OmokSessionInfo session,
+  int x,
+  int y,
+);
+
+class _OmokCoordinatePickerSheet extends ConsumerStatefulWidget {
+  const _OmokCoordinatePickerSheet({
+    required this.sessionId,
+    required this.myUserId,
+    required this.initialX,
+    required this.initialY,
+    required this.onPlace,
+  });
+
+  final String sessionId;
+  final String myUserId;
+  final int initialX;
+  final int initialY;
+  final _PlaceOmokCoordinate onPlace;
+
+  @override
+  ConsumerState<_OmokCoordinatePickerSheet> createState() =>
+      _OmokCoordinatePickerSheetState();
+}
+
+class _OmokCoordinatePickerSheetState
+    extends ConsumerState<_OmokCoordinatePickerSheet> {
+  late int _row;
+  late int _column;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _row = math.max(1, math.min(15, widget.initialY + 1));
+    _column = math.max(1, math.min(15, widget.initialX + 1));
+  }
+
+  Future<void> _confirm(OmokSessionInfo session) async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    final placed = await widget.onPlace(session, _column - 1, _row - 1);
+    if (!mounted) return;
+    if (placed) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _submitting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionAsync = ref.watch(omokSessionProvider(widget.sessionId));
+    final movesAsync = ref.watch(omokMovesProvider(widget.sessionId));
+    final session = sessionAsync.valueOrNull;
+    final moves = movesAsync.valueOrNull;
+    String? stone;
+    if (moves != null) {
+      for (final move in moves) {
+        if (move.x == _column - 1 && move.y == _row - 1) {
+          stone = move.stone;
+          break;
+        }
+      }
+    }
+    final dataReady = session != null &&
+        moves != null &&
+        !sessionAsync.isLoading &&
+        !movesAsync.isLoading &&
+        !sessionAsync.hasError &&
+        !movesAsync.hasError;
+    final isMyTurn = session?.currentTurnUserId == widget.myUserId;
+    final canConfirm = dataReady &&
+        session.isPlaying &&
+        isMyTurn &&
+        stone == null &&
+        !_submitting;
+    final status = _selectionStatus(
+      sessionAsync: sessionAsync,
+      movesAsync: movesAsync,
+      session: session,
+      stone: stone,
+      isMyTurn: isMyTurn,
+    );
+
+    Widget coordinateSelector({
+      required Key key,
+      required String label,
+      required int value,
+      required ValueChanged<int> onChanged,
+    }) {
+      return DropdownButtonFormField<int>(
+        key: key,
+        initialValue: value,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: '1~15 중 선택',
+        ),
+        items: List.generate(
+          15,
+          (index) => DropdownMenuItem<int>(
+            value: index + 1,
+            child: Text('${index + 1}'),
+          ),
+        ),
+        onChanged: _submitting
+            ? null
+            : (next) {
+                if (next != null) onChanged(next);
+              },
+      );
+    }
+
+    Widget actionButton({
+      required Widget child,
+      required Key key,
+      required VoidCallback? onPressed,
+      required bool primary,
+    }) {
+      final button = primary
+          ? FilledButton(key: key, onPressed: onPressed, child: child)
+          : OutlinedButton(key: key, onPressed: onPressed, child: child);
+      return ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: DearTouchTargets.comfortable,
+        ),
+        child: button,
+      );
+    }
+
+    final cancelButton = actionButton(
+      key: const ValueKey('omok-coordinate-cancel'),
+      onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+      primary: false,
+      child: const Text('취소'),
+    );
+    final confirmButton = actionButton(
+      key: const ValueKey('omok-coordinate-confirm'),
+      onPressed: canConfirm ? () => _confirm(session) : null,
+      primary: true,
+      child: Text(_submitting ? '돌 놓는 중...' : '돌 놓기 확인'),
+    );
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+
+    return AnimatedPadding(
+      key: const ValueKey('omok-coordinate-animated-padding'),
+      duration: DearMotion.duration(context, DearMotion.fast),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          key: const ValueKey('omok-coordinate-sheet'),
+          padding: const EdgeInsets.fromLTRB(
+            DearSpacing.space20,
+            0,
+            DearSpacing.space20,
+            DearSpacing.space24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '좌표로 돌 놓기',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+              const SizedBox(height: DearSpacing.space4),
+              Text(
+                '행과 열을 선택하고 현재 칸의 상태를 확인한 뒤 돌을 놓아 주세요.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: DearColors.secondary,
+                    ),
+              ),
+              const SizedBox(height: DearSpacing.space20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final reflow = textScale >= 1.6 || constraints.maxWidth < 340;
+                  final rowSelector = coordinateSelector(
+                    key: const ValueKey('omok-coordinate-row'),
+                    label: '행',
+                    value: _row,
+                    onChanged: (value) => setState(() => _row = value),
+                  );
+                  final columnSelector = coordinateSelector(
+                    key: const ValueKey('omok-coordinate-column'),
+                    label: '열',
+                    value: _column,
+                    onChanged: (value) => setState(() => _column = value),
+                  );
+                  if (reflow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        rowSelector,
+                        const SizedBox(height: DearSpacing.space12),
+                        columnSelector,
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: rowSelector),
+                      const SizedBox(width: DearSpacing.space12),
+                      Expanded(child: columnSelector),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: DearSpacing.space16),
+              Semantics(
+                key: const ValueKey('omok-coordinate-status'),
+                container: true,
+                liveRegion: true,
+                label: status,
+                child: ExcludeSemantics(
+                  child: Container(
+                    padding: const EdgeInsets.all(DearSpacing.space12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(DearRadii.control),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                    ),
+                    child: Text(
+                      status,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            height: 1.45,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: DearSpacing.space20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final reflow = textScale >= 1.6 || constraints.maxWidth < 340;
+                  if (reflow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        cancelButton,
+                        const SizedBox(height: DearSpacing.space8),
+                        confirmButton,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: cancelButton),
+                      const SizedBox(width: DearSpacing.space12),
+                      Expanded(child: confirmButton),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _selectionStatus({
+    required AsyncValue<OmokSessionInfo?> sessionAsync,
+    required AsyncValue<List<OmokMove>> movesAsync,
+    required OmokSessionInfo? session,
+    required String? stone,
+    required bool isMyTurn,
+  }) {
+    final coordinate = '$_row행 $_column열';
+    if (sessionAsync.hasError) {
+      return '$coordinate의 대국 상태를 불러오지 못했어요. 다시 시도해 주세요.';
+    }
+    if (movesAsync.hasError) {
+      return '$coordinate의 돌 상태를 불러오지 못했어요. 다시 시도해 주세요.';
+    }
+    if (session == null || movesAsync.valueOrNull == null) {
+      return '$coordinate의 상태를 확인하는 중입니다.';
+    }
+
+    final stoneLabel = switch (stone) {
+      'black' => '흑돌',
+      'white' => '백돌',
+      _ => '빈칸',
+    };
+    final coordinateStatus = '$coordinate은 $stoneLabel입니다.';
+    if (!session.isPlaying) {
+      return '$coordinateStatus 대국이 종료됐습니다. '
+          '${_omokEndReason(session, widget.myUserId)}';
+    }
+    if (_submitting) {
+      return '$coordinateStatus 현재 내 차례입니다. 돌을 놓는 중입니다.';
+    }
+    if (isMyTurn) {
+      return stone == null
+          ? '$coordinateStatus 현재 내 차례입니다. 돌 놓기를 확인할 수 있습니다.'
+          : '$coordinateStatus 현재 내 차례이지만 이미 돌이 있어 선택할 수 없습니다.';
+    }
+    return '$coordinateStatus 현재 상대 차례입니다. 상대 착수를 기다려 주세요.';
+  }
+}
+
+String _omokEndReason(OmokSessionInfo session, String myUserId) {
+  final result = session.winnerUserId == null
+      ? ''
+      : session.winnerUserId == myUserId
+          ? ' 내가 이겼습니다.'
+          : ' 상대가 이겼습니다.';
+  return switch (session.status) {
+    'black_win' || 'white_win' => '종료 이유: 다섯 돌 완성.$result',
+    'black_timeout_win' || 'white_timeout_win' => '종료 이유: 시간 초과.$result',
+    'black_resign_win' || 'white_resign_win' => '종료 이유: 기권.$result',
+    'draw' => '종료 이유: 무승부입니다.',
+    'cancelled' => '종료 이유: 대국 취소입니다.',
+    _ => '종료 이유: ${session.status}.',
+  };
 }
 
 class _OmokConnectionBanner extends StatelessWidget {
