@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:couple_chat_app/src/common/dear_design.dart';
@@ -15,12 +16,17 @@ Widget imageApp({
   double textScale = 1,
   List<String>? imageUrls,
   int initialIndex = 0,
+  ChatViewerImageProviderBuilder imageProviderBuilder =
+      _readyImageProviderBuilder,
 }) {
   return ProviderScope(
     overrides: [
       chatFetchImageBytesProvider.overrideWithValue(fetch),
       chatSaveImageProvider.overrideWithValue(save),
       chatShareImageProvider.overrideWithValue(share),
+      chatViewerImageProviderBuilderProvider.overrideWithValue(
+        imageProviderBuilder,
+      ),
     ],
     child: MaterialApp(
       home: MediaQuery(
@@ -34,6 +40,18 @@ Widget imageApp({
       ),
     ),
   );
+}
+
+final Uint8List _onePixelPng = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+);
+
+ImageProvider<Object> _readyImageProviderBuilder(String _) {
+  return MemoryImage(_onePixelPng);
+}
+
+ImageProvider<Object> _failingImageProviderBuilder(String _) {
+  return MemoryImage(Uint8List.fromList(const [0, 1, 2]));
 }
 
 void main() {
@@ -66,6 +84,7 @@ void main() {
         },
       ),
     );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('chat-image-save')));
     await tester.pumpAndSettle();
@@ -94,6 +113,7 @@ void main() {
         }) async {},
       ),
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('chat-image-save')));
     await tester.pumpAndSettle();
     expect(find.textContaining('기기 설정에서 권한을 허용'), findsOneWidget);
@@ -122,6 +142,7 @@ void main() {
         }) async {},
       ),
     );
+    await tester.pumpAndSettle();
     final semantics = tester.ensureSemantics();
 
     await tester.tap(find.byKey(const Key('chat-image-save')));
@@ -170,6 +191,7 @@ void main() {
         }) async {},
       ),
     );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('chat-image-save')));
     await tester.pumpAndSettle();
@@ -216,6 +238,7 @@ void main() {
         }) async {},
       ),
     );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('chat-image-save')));
     await tester.pump();
@@ -234,6 +257,7 @@ void main() {
   testWidgets('이미지 로딩 실패는 44pt 재시도와 live 안내를 제공한다', (tester) async {
     await tester.pumpWidget(
       imageApp(
+        imageProviderBuilder: _failingImageProviderBuilder,
         fetch: (_) async => Uint8List.fromList([1]),
         save: ({required bytes, required name}) async =>
             ChatImageSaveResult.saved,
@@ -268,6 +292,111 @@ void main() {
       find.byKey(const ValueKey<String>('chat-image-view-0-1')),
       findsOneWidget,
     );
+    semantics.dispose();
+  });
+
+  testWidgets('이미지 실패와 재시도 로딩 중 저장·공유를 잠그고 성공 후 다시 활성화한다', (tester) async {
+    var providerBuilds = 0;
+    ImageProvider<Object> retryingProvider(String _) {
+      providerBuilds += 1;
+      if (providerBuilds == 1) {
+        return MemoryImage(Uint8List.fromList(const [0, 1, 2]));
+      }
+      return MemoryImage(_onePixelPng);
+    }
+
+    await tester.pumpWidget(
+      imageApp(
+        imageProviderBuilder: retryingProvider,
+        fetch: (_) async => Uint8List.fromList([1]),
+        save: ({required bytes, required name}) async =>
+            ChatImageSaveResult.saved,
+        share: ({
+          required bytes,
+          required filename,
+          required mimeType,
+          sharePositionOrigin,
+        }) async {},
+      ),
+    );
+    final semantics = tester.ensureSemantics();
+    await tester.pumpAndSettle();
+
+    OutlinedButton saveButton() => tester.widget<OutlinedButton>(
+          find.byKey(const Key('chat-image-save')),
+        );
+    OutlinedButton shareButton() => tester.widget<OutlinedButton>(
+          find.byKey(const Key('chat-image-share')),
+        );
+
+    expect(saveButton().onPressed, isNull);
+    expect(shareButton().onPressed, isNull);
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(const Key('chat-image-action-unavailable')),
+          )
+          .label,
+      contains('사진을 불러오지 못해 저장과 공유를 사용할 수 없어요'),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('chat-image-retry-0')),
+    );
+    await tester.pump();
+
+    expect(saveButton().onPressed, isNull);
+    expect(shareButton().onPressed, isNull);
+
+    await tester.pumpAndSettle();
+
+    expect(saveButton().onPressed, isNotNull);
+    expect(shareButton().onPressed, isNotNull);
+    expect(
+      find.byKey(const Key('chat-image-action-unavailable')),
+      findsNothing,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('확대·넘기기 안내는 한 번만 보이고 좁은 폭·큰 글자에서 세로 재배치된다', (tester) async {
+    tester.view.physicalSize = const Size(300, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      imageApp(
+        textScale: 2,
+        imageUrls: const [
+          'https://example.invalid/first.png',
+          'https://example.invalid/second.png',
+        ],
+        fetch: (_) async => Uint8List.fromList([1]),
+        save: ({required bytes, required name}) async =>
+            ChatImageSaveResult.saved,
+        share: ({
+          required bytes,
+          required filename,
+          required mimeType,
+          sharePositionOrigin,
+        }) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('두 손가락으로 확대 · 좌우로 넘기기'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-image-gesture-guide-reflow')),
+      findsOneWidget,
+    );
+    final guide = tester.getSemantics(
+      find.byKey(const Key('chat-image-gesture-guide')),
+    );
+    expect(guide.label, '사진 조작 안내');
+    expect(guide.hint, contains('좌우로 쓸어 사진을 넘길 수 있어요'));
+    expect(tester.takeException(), isNull);
     semantics.dispose();
   });
 }

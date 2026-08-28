@@ -5,6 +5,15 @@ import 'package:couple_chat_app/src/features/chat/presentation/chat_image_action
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+typedef ChatViewerImageProviderBuilder = ImageProvider<Object> Function(
+  String imageUrl,
+);
+
+final chatViewerImageProviderBuilderProvider =
+    Provider<ChatViewerImageProviderBuilder>((ref) {
+  return (imageUrl) => NetworkImage(imageUrl);
+});
+
 class ChatImageViewPage extends ConsumerStatefulWidget {
   const ChatImageViewPage({
     required this.imageUrl,
@@ -31,6 +40,8 @@ class _ChatImageViewPageState extends ConsumerState<ChatImageViewPage> {
   late final PageController _pageController;
   late int _currentIndex;
   final Map<String, Uint8List> _downloadedBytes = <String, Uint8List>{};
+  final Map<int, _ViewerImageLoadState> _imageLoadStates =
+      <int, _ViewerImageLoadState>{};
   _PendingImageAction? _busyAction;
   _ImageActionFailure? _actionFailure;
 
@@ -75,9 +86,19 @@ class _ChatImageViewPageState extends ConsumerState<ChatImageViewPage> {
     return 'dear_${DateTime.now().millisecondsSinceEpoch}_${index + 1}';
   }
 
+  _ViewerImageLoadState _loadStateFor(int index) {
+    return _imageLoadStates[index] ?? _ViewerImageLoadState.loading;
+  }
+
+  void _updateImageLoadState(int index, _ViewerImageLoadState state) {
+    if (!mounted || _imageLoadStates[index] == state) return;
+    setState(() => _imageLoadStates[index] = state);
+  }
+
   Future<void> _saveCurrentImage([int? requestedIndex]) async {
     if (_busyAction != null) return;
     final targetIndex = requestedIndex ?? _currentIndex;
+    if (_loadStateFor(targetIndex) != _ViewerImageLoadState.ready) return;
     setState(() {
       _busyAction = _PendingImageAction(
         action: _ImageAction.save,
@@ -133,6 +154,7 @@ class _ChatImageViewPageState extends ConsumerState<ChatImageViewPage> {
   Future<void> _shareCurrentImage([int? requestedIndex]) async {
     if (_busyAction != null) return;
     final targetIndex = requestedIndex ?? _currentIndex;
+    if (_loadStateFor(targetIndex) != _ViewerImageLoadState.ready) return;
     setState(() {
       _busyAction = _PendingImageAction(
         action: _ImageAction.share,
@@ -183,6 +205,17 @@ class _ChatImageViewPageState extends ConsumerState<ChatImageViewPage> {
   @override
   Widget build(BuildContext context) {
     final total = _imageUrls.length;
+    final currentLoadState = _loadStateFor(_currentIndex);
+    final imageReady = currentLoadState == _ViewerImageLoadState.ready;
+    final actionsEnabled = imageReady && _busyAction == null;
+    final unavailableReason = switch (currentLoadState) {
+      _ViewerImageLoadState.loading => '현재 사진을 불러오는 중이라 저장과 공유를 사용할 수 없어요.',
+      _ViewerImageLoadState.error =>
+        '현재 사진을 불러오지 못해 저장과 공유를 사용할 수 없어요. 먼저 사진 다시 시도를 눌러 주세요.',
+      _ViewerImageLoadState.ready when _busyAction != null =>
+        '진행 중인 사진 작업이 끝난 뒤 저장과 공유를 사용할 수 있어요.',
+      _ViewerImageLoadState.ready => null,
+    };
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -193,33 +226,43 @@ class _ChatImageViewPageState extends ConsumerState<ChatImageViewPage> {
           total > 1 ? '이미지 보기 ${_currentIndex + 1} / $total' : '이미지 보기',
         ),
       ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: _imageUrls.length,
-        onPageChanged: (index) => setState(() => _currentIndex = index),
-        itemBuilder: (context, index) {
-          return Semantics(
-            container: true,
-            image: true,
-            label: total == 1
-                ? '사진. 두 손가락으로 확대할 수 있어요.'
-                : '${index + 1}번째 사진, 전체 $total장. '
-                    '두 손가락으로 확대하고 좌우로 넘길 수 있어요.',
-            child: Center(
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 4,
-                child: Hero(
-                  tag: _heroTags[index],
-                  child: _RetryableNetworkImage(
-                    imageUrl: _imageUrls[index],
-                    index: index,
+      body: Column(
+        children: [
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: _imageUrls.length,
+              onPageChanged: (index) => setState(() => _currentIndex = index),
+              itemBuilder: (context, index) {
+                return Semantics(
+                  container: true,
+                  image: true,
+                  label: total == 1
+                      ? '사진. 두 손가락으로 확대할 수 있어요.'
+                      : '${index + 1}번째 사진, 전체 $total장. '
+                          '두 손가락으로 확대하고 좌우로 넘길 수 있어요.',
+                  child: Center(
+                    child: InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 4,
+                      child: Hero(
+                        tag: _heroTags[index],
+                        child: _RetryableNetworkImage(
+                          imageUrl: _imageUrls[index],
+                          index: index,
+                          onLoadStateChanged: (state) =>
+                              _updateImageLoadState(index, state),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-          );
-        },
+          ),
+          const _ViewerGestureGuide(),
+          const SizedBox(height: DearSpacing.space8),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -247,56 +290,82 @@ class _ChatImageViewPageState extends ConsumerState<ChatImageViewPage> {
                       '${busy.action == _ImageAction.save ? '저장' : '공유'} 중',
                   child: const SizedBox.shrink(),
                 ),
+              if (unavailableReason != null)
+                Semantics(
+                  key: const Key('chat-image-action-unavailable'),
+                  container: true,
+                  liveRegion: true,
+                  label: unavailableReason,
+                  child: const SizedBox.shrink(),
+                ),
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 12,
                 runSpacing: 8,
                 children: [
-                  OutlinedButton.icon(
-                    key: const Key('chat-image-save'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white54),
-                      minimumSize: const Size(
-                        DearTouchTargets.minimum,
-                        DearTouchTargets.minimum,
+                  Semantics(
+                    container: true,
+                    button: true,
+                    enabled: actionsEnabled,
+                    label: '사진 저장',
+                    hint: unavailableReason,
+                    onTap: actionsEnabled ? _saveCurrentImage : null,
+                    excludeSemantics: true,
+                    child: OutlinedButton.icon(
+                      key: const Key('chat-image-save'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white54),
+                        minimumSize: const Size(
+                          DearTouchTargets.minimum,
+                          DearTouchTargets.minimum,
+                        ),
                       ),
+                      onPressed: actionsEnabled ? _saveCurrentImage : null,
+                      icon: _busyAction?.action == _ImageAction.save
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.download_rounded),
+                      label: const Text('저장'),
                     ),
-                    onPressed: _busyAction == null ? _saveCurrentImage : null,
-                    icon: _busyAction?.action == _ImageAction.save
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.download_rounded),
-                    label: const Text('저장'),
                   ),
-                  OutlinedButton.icon(
-                    key: const Key('chat-image-share'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white54),
-                      minimumSize: const Size(
-                        DearTouchTargets.minimum,
-                        DearTouchTargets.minimum,
+                  Semantics(
+                    container: true,
+                    button: true,
+                    enabled: actionsEnabled,
+                    label: '사진 공유',
+                    hint: unavailableReason,
+                    onTap: actionsEnabled ? _shareCurrentImage : null,
+                    excludeSemantics: true,
+                    child: OutlinedButton.icon(
+                      key: const Key('chat-image-share'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white54),
+                        minimumSize: const Size(
+                          DearTouchTargets.minimum,
+                          DearTouchTargets.minimum,
+                        ),
                       ),
+                      onPressed: actionsEnabled ? _shareCurrentImage : null,
+                      icon: _busyAction?.action == _ImageAction.share
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.ios_share_rounded),
+                      label: const Text('공유'),
                     ),
-                    onPressed: _busyAction == null ? _shareCurrentImage : null,
-                    icon: _busyAction?.action == _ImageAction.share
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.ios_share_rounded),
-                    label: const Text('공유'),
                   ),
                 ],
               ),
@@ -308,38 +377,145 @@ class _ChatImageViewPageState extends ConsumerState<ChatImageViewPage> {
   }
 }
 
-class _RetryableNetworkImage extends StatefulWidget {
+class _ViewerGestureGuide extends StatelessWidget {
+  const _ViewerGestureGuide();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final reflow = MediaQuery.textScalerOf(context).scale(1) >= 1.6 ||
+            constraints.maxWidth < 320;
+        const icon = ExcludeSemantics(
+          child: Icon(
+            Icons.pinch_rounded,
+            size: DearIconSizes.small,
+            color: Colors.white70,
+          ),
+        );
+        final text = Text(
+          '두 손가락으로 확대 · 좌우로 넘기기',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white,
+                height: 1.35,
+              ),
+        );
+
+        return Semantics(
+          key: const Key('chat-image-gesture-guide'),
+          container: true,
+          label: '사진 조작 안내',
+          hint: '두 손가락으로 확대하고 좌우로 쓸어 사진을 넘길 수 있어요.',
+          excludeSemantics: true,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: DearSpacing.space20,
+              vertical: DearSpacing.space4,
+            ),
+            child: reflow
+                ? Column(
+                    key: const Key('chat-image-gesture-guide-reflow'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      icon,
+                      const SizedBox(height: DearSpacing.space4),
+                      text,
+                    ],
+                  )
+                : Row(
+                    key: const Key('chat-image-gesture-guide-inline'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      icon,
+                      const SizedBox(width: DearSpacing.space8),
+                      Flexible(child: text),
+                    ],
+                  ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _ViewerImageLoadState { loading, ready, error }
+
+class _RetryableNetworkImage extends ConsumerStatefulWidget {
   const _RetryableNetworkImage({
     required this.imageUrl,
     required this.index,
+    required this.onLoadStateChanged,
   });
 
   final String imageUrl;
   final int index;
+  final ValueChanged<_ViewerImageLoadState> onLoadStateChanged;
 
   @override
-  State<_RetryableNetworkImage> createState() => _RetryableNetworkImageState();
+  ConsumerState<_RetryableNetworkImage> createState() =>
+      _RetryableNetworkImageState();
 }
 
-class _RetryableNetworkImageState extends State<_RetryableNetworkImage> {
+class _RetryableNetworkImageState
+    extends ConsumerState<_RetryableNetworkImage> {
   int _generation = 0;
+  late ImageProvider<Object> _imageProvider;
+  _ViewerImageLoadState? _lastReportedState;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageProvider = _createImageProvider();
+    _reportLoadState(_ViewerImageLoadState.loading);
+  }
+
+  @override
+  void didUpdateWidget(covariant _RetryableNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _imageProvider = _createImageProvider();
+      _generation = 0;
+      _reportLoadState(_ViewerImageLoadState.loading);
+    }
+  }
+
+  ImageProvider<Object> _createImageProvider() {
+    return ref.read(chatViewerImageProviderBuilderProvider)(widget.imageUrl);
+  }
+
+  void _reportLoadState(_ViewerImageLoadState state) {
+    if (_lastReportedState == state) return;
+    _lastReportedState = state;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastReportedState != state) return;
+      widget.onLoadStateChanged(state);
+    });
+  }
 
   Future<void> _retry() async {
-    await NetworkImage(widget.imageUrl).evict();
+    await _imageProvider.evict();
     if (!mounted) return;
     setState(() => _generation++);
+    _imageProvider = _createImageProvider();
+    _reportLoadState(_ViewerImageLoadState.loading);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      widget.imageUrl,
+    return Image(
+      image: _imageProvider,
       key: ValueKey<String>(
         'chat-image-view-${widget.index}-$_generation',
       ),
       fit: BoxFit.contain,
       loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
+        if (progress == null) {
+          _reportLoadState(_ViewerImageLoadState.ready);
+          return child;
+        }
+        _reportLoadState(_ViewerImageLoadState.loading);
         return Semantics(
           liveRegion: true,
           label: '이미지를 불러오는 중',
@@ -351,6 +527,7 @@ class _RetryableNetworkImageState extends State<_RetryableNetworkImage> {
         );
       },
       errorBuilder: (context, error, stackTrace) {
+        _reportLoadState(_ViewerImageLoadState.error);
         return Semantics(
           container: true,
           liveRegion: true,
