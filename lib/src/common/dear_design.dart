@@ -18,8 +18,14 @@ class DearColors {
   static const ink = Color(0xFF2D1F25);
   static const secondary = Color(0xFF6F5963);
   static const muted = Color(0xFF8C6F7A);
+  // Placeholder copy is readable as normal-size text and remains distinct from
+  // secondary content. Disabled is reserved for genuinely unavailable UI.
+  static const placeholder = Color(0xFF876A76);
   static const disabled = Color(0xFF9F8A94);
   static const line = Color(0xFFF2D6DF);
+  // Interactive boundaries need stronger contrast than decorative dividers.
+  // This color has a 3.09:1 contrast ratio against the white card surface.
+  static const outlineStrong = Color(0xFFC47E99);
   static const warmLine = Color(0xFFF0D7D2);
   static const shadow = Color(0xFF2D1F25);
   static const error = Color(0xFFD64545);
@@ -57,9 +63,133 @@ class DearGradients {
 }
 
 class DearRadii {
-  static const small = 8.0;
-  static const medium = 12.0;
-  static const large = 16.0;
+  static const chip = 14.0;
+  static const control = 18.0;
+  static const card = 22.0;
+  static const sheet = 30.0;
+  static const pill = 999.0;
+
+  // Compatibility aliases for existing feature code. New common components
+  // should prefer the semantic names above.
+  static const extraSmall = 8.0;
+  static const small = chip;
+  static const medium = control;
+  static const large = card;
+  static const extraLarge = sheet;
+}
+
+class DearSpacing {
+  const DearSpacing._();
+
+  static const space4 = 4.0;
+  static const space8 = 8.0;
+  static const space12 = 12.0;
+  static const space16 = 16.0;
+  static const space20 = 20.0;
+  static const space24 = 24.0;
+  static const space32 = 32.0;
+  static const space40 = 40.0;
+  static const space48 = 48.0;
+}
+
+class DearIconSizes {
+  const DearIconSizes._();
+
+  static const small = 20.0;
+  static const medium = 24.0;
+  static const large = 28.0;
+  static const feature = 44.0;
+}
+
+class DearTouchTargets {
+  const DearTouchTargets._();
+
+  static const minimum = 44.0;
+  static const comfortable = 48.0;
+  static const spacing = DearSpacing.space8;
+}
+
+class DearMotion {
+  const DearMotion._();
+
+  static const instant = Duration.zero;
+  static const fast = Duration(milliseconds: 120);
+  static const standard = Duration(milliseconds: 180);
+  static const emphasized = Duration(milliseconds: 260);
+  static const exit = Duration(milliseconds: 160);
+
+  static const enterCurve = Curves.easeOutCubic;
+  static const exitCurve = Curves.easeInCubic;
+  static const emphasizedCurve = Curves.easeOutBack;
+
+  static Duration duration(BuildContext context, Duration preferred) {
+    return MediaQuery.disableAnimationsOf(context) ? instant : preferred;
+  }
+}
+
+class DearTextStyles {
+  const DearTextStyles._();
+
+  static const displayDday = TextStyle(
+    fontSize: 48,
+    height: 56 / 48,
+    fontWeight: FontWeight.w800,
+  );
+  static const title = TextStyle(
+    fontSize: 24,
+    height: 32 / 24,
+    fontWeight: FontWeight.w800,
+  );
+  static const titleSmall = TextStyle(
+    fontSize: 18,
+    height: 24 / 18,
+    fontWeight: FontWeight.w700,
+  );
+  static const body = TextStyle(
+    fontSize: 16,
+    height: 24 / 16,
+    fontWeight: FontWeight.w400,
+  );
+  static const bodySmall = TextStyle(
+    fontSize: 14,
+    height: 20 / 14,
+    fontWeight: FontWeight.w400,
+  );
+  static const label = TextStyle(
+    fontSize: 13,
+    height: 18 / 13,
+    fontWeight: FontWeight.w600,
+  );
+
+  static TextTheme applyTo(
+    TextTheme base, {
+    required Color primaryColor,
+    required Color secondaryColor,
+  }) {
+    TextStyle merge(
+      TextStyle? baseStyle,
+      TextStyle token,
+      Color color,
+    ) {
+      return (baseStyle ?? const TextStyle())
+          .merge(token)
+          .copyWith(color: color);
+    }
+
+    return base.copyWith(
+      displayMedium: merge(base.displayMedium, displayDday, primaryColor),
+      headlineSmall: merge(base.headlineSmall, title, primaryColor),
+      titleLarge: merge(base.titleLarge, title, primaryColor),
+      titleMedium: merge(base.titleMedium, titleSmall, primaryColor),
+      titleSmall: merge(base.titleSmall, titleSmall, primaryColor),
+      bodyLarge: merge(base.bodyLarge, body, primaryColor),
+      bodyMedium: merge(base.bodyMedium, body, primaryColor),
+      bodySmall: merge(base.bodySmall, bodySmall, secondaryColor),
+      labelLarge: merge(base.labelLarge, label, primaryColor),
+      labelMedium: merge(base.labelMedium, label, primaryColor),
+      labelSmall: merge(base.labelSmall, label, secondaryColor),
+    );
+  }
 }
 
 List<BoxShadow> dearSoftShadow([double opacity = 1]) {
@@ -89,9 +219,9 @@ class DearBackground extends StatelessWidget {
 class DearCard extends StatelessWidget {
   const DearCard({
     required this.child,
-    this.padding = const EdgeInsets.all(18),
+    this.padding = const EdgeInsets.all(DearSpacing.space16),
     this.margin = EdgeInsets.zero,
-    this.radius = DearRadii.medium,
+    this.radius = DearRadii.card,
     this.gradient,
     this.color = DearColors.card,
     this.borderColor = DearColors.line,
@@ -148,7 +278,7 @@ class DearGradientButton extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: DearGradients.cta,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(DearRadii.control),
           boxShadow: [
             BoxShadow(
               color: DearColors.shadow.withValues(alpha: 0.08),
@@ -159,9 +289,9 @@ class DearGradientButton extends StatelessWidget {
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(DearRadii.control),
           child: InkWell(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(DearRadii.control),
             onTap: onPressed,
             child: SizedBox(
               height: height,
@@ -170,8 +300,12 @@ class DearGradientButton extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (icon != null) ...[
-                      Icon(icon, color: Colors.white, size: 20),
-                      const SizedBox(width: 8),
+                      Icon(
+                        icon,
+                        color: Colors.white,
+                        size: DearIconSizes.small,
+                      ),
+                      const SizedBox(width: DearSpacing.space8),
                     ],
                     Text(
                       label,
@@ -217,9 +351,432 @@ class DearIconBubble extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(DearRadii.chip),
       ),
       child: Icon(icon, size: iconSize, color: color),
+    );
+  }
+}
+
+class DearIconButton extends StatelessWidget {
+  const DearIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.semanticLabel,
+    this.selectedIcon,
+    this.selected,
+    this.toggled,
+    this.targetSize = DearTouchTargets.minimum,
+    this.iconSize = DearIconSizes.medium,
+    this.color,
+    this.disabledColor,
+    this.style,
+    this.focusNode,
+    this.autofocus = false,
+    super.key,
+  })  : assert(tooltip.length > 0),
+        assert(targetSize >= DearTouchTargets.minimum),
+        assert(selected == null || toggled == null);
+
+  final Widget icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final String? semanticLabel;
+  final Widget? selectedIcon;
+  final bool? selected;
+  final bool? toggled;
+  final double targetSize;
+  final double iconSize;
+  final Color? color;
+  final Color? disabledColor;
+  final ButtonStyle? style;
+  final FocusNode? focusNode;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selected ?? toggled;
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: onPressed != null,
+      label: semanticLabel ?? tooltip,
+      selected: selected,
+      toggled: toggled,
+      onTap: onPressed,
+      excludeSemantics: true,
+      child: SizedBox.square(
+        dimension: targetSize,
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: icon,
+          selectedIcon: selectedIcon,
+          isSelected: isSelected,
+          iconSize: iconSize,
+          color: color,
+          disabledColor: disabledColor,
+          style: style,
+          focusNode: focusNode,
+          autofocus: autofocus,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints.tightFor(
+            width: targetSize,
+            height: targetSize,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum DearAsyncSectionStatus { content, loading, empty, error }
+
+class DearAsyncSection extends StatelessWidget {
+  const DearAsyncSection({
+    required this.status,
+    this.content,
+    this.skeleton,
+    this.errorMessage,
+    this.onRetry,
+    this.retrying = false,
+    this.loadingLabel = '내용을 불러오는 중',
+    this.retryLabel = '다시 시도',
+    this.retryingLabel = '다시 불러오는 중',
+    this.emptyTitle = '아직 내용이 없어요',
+    this.emptyMessage,
+    this.emptyIcon = Icons.inbox_outlined,
+    this.emptyActionLabel,
+    this.onEmptyAction,
+    this.statusSpacing = DearSpacing.space12,
+    super.key,
+  })  : assert(
+          status != DearAsyncSectionStatus.error ||
+              (errorMessage != null && errorMessage != ''),
+        ),
+        assert(
+          (emptyActionLabel == null && onEmptyAction == null) ||
+              (emptyActionLabel != null && onEmptyAction != null),
+        ),
+        assert(!retrying || status == DearAsyncSectionStatus.error);
+
+  final DearAsyncSectionStatus status;
+  final Widget? content;
+  final Widget? skeleton;
+  final String? errorMessage;
+  final VoidCallback? onRetry;
+  final bool retrying;
+  final String loadingLabel;
+  final String retryLabel;
+  final String retryingLabel;
+  final String emptyTitle;
+  final String? emptyMessage;
+  final IconData emptyIcon;
+  final String? emptyActionLabel;
+  final VoidCallback? onEmptyAction;
+  final double statusSpacing;
+
+  @override
+  Widget build(BuildContext context) {
+    if (status == DearAsyncSectionStatus.empty) {
+      return DearEmptyState(
+        title: emptyTitle,
+        message: emptyMessage,
+        icon: emptyIcon,
+        actionLabel: emptyActionLabel,
+        onAction: onEmptyAction,
+      );
+    }
+
+    final inlineStatus = switch (status) {
+      DearAsyncSectionStatus.loading => DearInlineLoading(
+          label: loadingLabel,
+        ),
+      DearAsyncSectionStatus.error => DearInlineError(
+          message: errorMessage!,
+          onRetry: onRetry,
+          retrying: retrying,
+          retryLabel: retryLabel,
+          retryingLabel: retryingLabel,
+        ),
+      DearAsyncSectionStatus.content || DearAsyncSectionStatus.empty => null,
+    };
+
+    final preservedContent = content;
+    if (preservedContent != null) {
+      if (inlineStatus == null) return preservedContent;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          inlineStatus,
+          SizedBox(height: statusSpacing),
+          preservedContent,
+        ],
+      );
+    }
+
+    return switch (status) {
+      DearAsyncSectionStatus.loading => DearLoadingState(
+          label: loadingLabel,
+          skeleton: skeleton,
+        ),
+      DearAsyncSectionStatus.error => inlineStatus!,
+      DearAsyncSectionStatus.content ||
+      DearAsyncSectionStatus.empty =>
+        const SizedBox.shrink(),
+    };
+  }
+}
+
+class DearInlineError extends StatelessWidget {
+  const DearInlineError({
+    required this.message,
+    this.onRetry,
+    this.retrying = false,
+    this.retryLabel = '다시 시도',
+    this.retryingLabel = '다시 불러오는 중',
+    super.key,
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+  final bool retrying;
+  final String retryLabel;
+  final String retryingLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final statusLabel = retrying ? '$message. $retryingLabel' : message;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: statusLabel,
+      child: Material(
+        color: scheme.errorContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DearRadii.large),
+          side: BorderSide(
+            color: scheme.error.withValues(alpha: 0.34),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(DearSpacing.space12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ExcludeSemantics(
+                child: Icon(
+                  Icons.error_outline_rounded,
+                  color: scheme.onErrorContainer,
+                  size: DearIconSizes.medium,
+                ),
+              ),
+              const SizedBox(width: DearSpacing.space12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ExcludeSemantics(
+                      child: Text(
+                        message,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onErrorContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                    if (onRetry != null || retrying) ...[
+                      const SizedBox(height: DearSpacing.space4),
+                      TextButton.icon(
+                        onPressed: retrying ? null : onRetry,
+                        style: TextButton.styleFrom(
+                          foregroundColor: scheme.onErrorContainer,
+                          minimumSize: const Size(
+                            DearTouchTargets.minimum,
+                            DearTouchTargets.minimum,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: DearSpacing.space8,
+                          ),
+                        ),
+                        icon: retrying
+                            ? SizedBox.square(
+                                dimension: DearIconSizes.small,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: scheme.onErrorContainer,
+                                ),
+                              )
+                            : const Icon(Icons.refresh_rounded),
+                        label: Text(retrying ? retryingLabel : retryLabel),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DearInlineLoading extends StatelessWidget {
+  const DearInlineLoading({
+    this.label = '내용을 불러오는 중',
+    super.key,
+  });
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(DearRadii.large),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(DearSpacing.space12),
+            child: Row(
+              children: [
+                const SizedBox.square(
+                  dimension: DearIconSizes.small,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: DearSpacing.space12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DearLoadingState extends StatelessWidget {
+  const DearLoadingState({
+    this.label = '내용을 불러오는 중',
+    this.skeleton,
+    super.key,
+  });
+
+  final String label;
+  final Widget? skeleton;
+
+  @override
+  Widget build(BuildContext context) {
+    final loadingSkeleton = skeleton;
+    if (loadingSkeleton != null) {
+      return Semantics(
+        container: true,
+        liveRegion: true,
+        label: label,
+        child: ExcludeSemantics(child: loadingSkeleton),
+      );
+    }
+
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.all(DearSpacing.space24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: DearSpacing.space12),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DearEmptyState extends StatelessWidget {
+  const DearEmptyState({
+    required this.title,
+    this.message,
+    this.icon = Icons.inbox_outlined,
+    this.actionLabel,
+    this.onAction,
+    super.key,
+  }) : assert(
+          (actionLabel == null && onAction == null) ||
+              (actionLabel != null && onAction != null),
+        );
+
+  final String title;
+  final String? message;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Padding(
+        padding: const EdgeInsets.all(DearSpacing.space24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ExcludeSemantics(
+              child: DearIconBubble(
+                icon: icon,
+                size: 64,
+                iconSize: DearIconSizes.large,
+              ),
+            ),
+            const SizedBox(height: DearSpacing.space12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            if (message != null) ...[
+              const SizedBox(height: DearSpacing.space8),
+              Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (onAction != null && actionLabel != null) ...[
+              const SizedBox(height: DearSpacing.space16),
+              FilledButton(
+                onPressed: onAction,
+                child: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

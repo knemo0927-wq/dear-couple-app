@@ -21,21 +21,26 @@ class AppTheme {
       surfaceContainerHighest: DearColors.blushDeep,
       onSurface: DearColors.ink,
       onSurfaceVariant: DearColors.secondary,
+      outline: DearColors.outlineStrong,
       outlineVariant: DearColors.line,
       error: DearColors.error,
     );
 
-    final borderRadius = BorderRadius.circular(DearRadii.medium);
+    final controlBorderRadius = BorderRadius.circular(DearRadii.control);
+    final cardBorderRadius = BorderRadius.circular(DearRadii.card);
+    final textTheme = DearTextStyles.applyTo(
+      Typography.blackCupertino,
+      primaryColor: DearColors.ink,
+      secondaryColor: DearColors.secondary,
+    );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: DearColors.backgroundTop,
       fontFamilyFallback: const ['Apple SD Gothic Neo', 'Noto Sans KR'],
-      textTheme: Typography.blackCupertino.apply(
-        bodyColor: DearColors.ink,
-        displayColor: DearColors.ink,
-      ),
+      textTheme: textTheme,
+      iconTheme: const IconThemeData(size: DearIconSizes.medium),
       appBarTheme: const AppBarTheme(
         centerTitle: true,
         backgroundColor: DearColors.backgroundTop,
@@ -53,6 +58,7 @@ class AppTheme {
         titleTextStyle: TextStyle(
           color: DearColors.ink,
           fontSize: 18,
+          height: 24 / 18,
           fontWeight: FontWeight.w800,
         ),
         surfaceTintColor: Colors.transparent,
@@ -62,28 +68,42 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: borderRadius,
+          borderRadius: cardBorderRadius,
           side: const BorderSide(color: DearColors.line),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
-        hintStyle: const TextStyle(color: DearColors.disabled),
-        labelStyle: const TextStyle(color: DearColors.muted),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: DearSpacing.space16,
+          vertical: DearSpacing.space16,
+        ),
+        hintStyle: const TextStyle(color: DearColors.placeholder),
+        labelStyle: const TextStyle(color: DearColors.secondary),
         border: OutlineInputBorder(
-          borderRadius: borderRadius,
-          borderSide: const BorderSide(color: DearColors.line),
+          borderRadius: controlBorderRadius,
+          borderSide: const BorderSide(color: DearColors.outlineStrong),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: borderRadius,
-          borderSide: const BorderSide(color: DearColors.line),
+          borderRadius: controlBorderRadius,
+          borderSide: const BorderSide(color: DearColors.outlineStrong),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: borderRadius,
-          borderSide: const BorderSide(color: DearColors.coral, width: 1.4),
+          borderRadius: controlBorderRadius,
+          borderSide: const BorderSide(color: DearColors.coralText, width: 1.6),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: controlBorderRadius,
+          borderSide: const BorderSide(color: DearColors.line),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: controlBorderRadius,
+          borderSide: BorderSide(color: scheme.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: controlBorderRadius,
+          borderSide: BorderSide(color: scheme.error, width: 1.6),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -91,7 +111,7 @@ class AppTheme {
           backgroundColor: DearColors.coralText,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DearRadii.medium),
+            borderRadius: BorderRadius.circular(DearRadii.control),
           ),
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           elevation: 0,
@@ -102,7 +122,7 @@ class AppTheme {
           backgroundColor: DearColors.coralText,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DearRadii.medium),
+            borderRadius: BorderRadius.circular(DearRadii.control),
           ),
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         ),
@@ -110,9 +130,9 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: DearColors.coralText,
-          side: const BorderSide(color: DearColors.line),
+          side: const BorderSide(color: DearColors.outlineStrong),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DearRadii.medium),
+            borderRadius: BorderRadius.circular(DearRadii.control),
           ),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
         ),
@@ -125,18 +145,23 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DearRadii.medium),
+          borderRadius: BorderRadius.circular(DearRadii.control),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: DearColors.card,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(DearRadii.sheet),
+          ),
+        ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: DearColors.card,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DearRadii.large),
+          borderRadius: BorderRadius.circular(DearRadii.card),
         ),
       ),
     );
@@ -152,10 +177,18 @@ class AppTheme {
       surface: const Color(0xFF1A1217),
       surfaceContainerHighest: const Color(0xFF35222D),
     );
+    final textTheme = DearTextStyles.applyTo(
+      Typography.whiteCupertino,
+      primaryColor: scheme.onSurface,
+      secondaryColor: scheme.onSurfaceVariant,
+    );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
+      fontFamilyFallback: const ['Apple SD Gothic Neo', 'Noto Sans KR'],
+      textTheme: textTheme,
+      iconTheme: const IconThemeData(size: DearIconSizes.medium),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         backgroundColor: Colors.transparent,
