@@ -10,11 +10,13 @@ import 'package:couple_chat_app/src/features/chat/data/memory_album_repository.d
 import 'package:couple_chat_app/src/features/notifications/data/notification_preferences.dart';
 import 'package:couple_chat_app/src/features/settings/data/couple_prefs_providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('기념일 대시보드가 히어로와 다가오는 목록을 표시한다', (tester) async {
+    final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -134,9 +136,8 @@ void main() {
 
     final assetNames = tester
         .widgetList<Image>(find.byType(Image))
-        .map((image) => image.image)
-        .whereType<AssetImage>()
-        .map((image) => image.assetName)
+        .map(_assetName)
+        .whereType<String>()
         .toSet();
 
     expect(
@@ -146,20 +147,91 @@ void main() {
           'assets/images/anniversary/anniv_hero_ring.png',
           'assets/images/anniversary/anniv_event_ring.png',
           'assets/images/anniversary/anniv_event_heart.png',
-          'assets/images/anniversary/anniv_bell.png',
-          'assets/images/anniversary/anniv_chevron_right.png',
-          'assets/images/anniversary/anniv_add_plus.png',
         ],
       ),
+    );
+    for (final operationalGlyph in const [
+      'assets/images/anniversary/anniv_more_dots.png',
+      'assets/images/anniversary/anniv_bell.png',
+      'assets/images/anniversary/anniv_chevron_right.png',
+      'assets/images/anniversary/anniv_add_plus.png',
+    ]) {
+      expect(assetNames, isNot(contains(operationalGlyph)));
+    }
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_rounded), findsWidgets);
+    expect(find.byIcon(Icons.add_rounded), findsOneWidget);
+
+    final decorativeChevrons = find.byIcon(Icons.chevron_right_rounded);
+    expect(decorativeChevrons, findsWidgets);
+    expect(
+      find
+          .ancestor(
+            of: decorativeChevrons,
+            matching: find.byType(ExcludeSemantics),
+          )
+          .evaluate()
+          .length,
+      decorativeChevrons.evaluate().length,
+    );
+
+    for (final image in tester.widgetList<Image>(find.byType(Image))) {
+      if (_assetName(image) != null) {
+        expect(image.image, isA<ResizeImage>());
+      }
+    }
+    final heroImage = tester.widget<Image>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            _assetName(widget) ==
+                'assets/images/anniversary/anniv_hero_ring.png' &&
+            widget.width == 224,
+      ),
+    );
+    final resizedHero = heroImage.image as ResizeImage;
+    expect(resizedHero.width, 224);
+    expect(resizedHero.height, 136);
+
+    for (final control in [
+      find.bySemanticsLabel('더보기'),
+      find.bySemanticsLabel('기념일 추가'),
+      find.bySemanticsLabel('알림 켜짐').first,
+    ]) {
+      final size = tester.getSize(control);
+      expect(size.width, greaterThanOrEqualTo(44));
+      expect(size.height, greaterThanOrEqualTo(44));
+      expect(
+        tester
+            .getSemantics(control)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+    }
+    expect(find.byTooltip('더보기'), findsOneWidget);
+    expect(find.byTooltip('기념일 추가'), findsOneWidget);
+    expect(find.byTooltip('알림 켜짐'), findsWidgets);
+    expect(
+      tester
+          .getSemantics(find.bySemanticsLabel('알림 켜짐').first)
+          .getSemanticsData()
+          .flagsCollection
+          .isToggled
+          .toBoolOrNull(),
+      isTrue,
     );
 
     final hasDdayChip = tester
         .widgetList<Text>(find.byType(Text))
         .any((text) => text.data?.startsWith('D-') ?? false);
     expect(hasDdayChip, isTrue);
+    semantics.dispose();
   });
 
   testWidgets('전체 기념일은 좌측 뒤로가기와 스크롤 페이징을 제공한다', (tester) async {
+    final semantics = tester.ensureSemantics();
     tester.view.physicalSize = const Size(1080, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -214,6 +286,16 @@ void main() {
 
     expect(find.text('전체 기념일'), findsOneWidget);
     expect(find.bySemanticsLabel('뒤로가기'), findsOneWidget);
+    expect(find.byTooltip('뒤로가기'), findsOneWidget);
+    final backButton = find.bySemanticsLabel('뒤로가기');
+    expect(tester.getSize(backButton).shortestSide, greaterThanOrEqualTo(44));
+    expect(
+      tester
+          .getSemantics(backButton)
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
     expect(find.text('3주년'), findsOneWidget);
     expect(find.text('15개 더 보기'), findsNothing);
     expect(find.text('2200일'), findsNothing);
@@ -223,6 +305,7 @@ void main() {
       await tester.pump();
     }
     expect(find.text('2200일'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('사용자 기념일은 선물 이미지와 실제 수정 및 삭제 상세를 제공한다', (tester) async {
@@ -320,9 +403,8 @@ void main() {
     expect(find.text('첫 여행'), findsOneWidget);
     final assetNames = tester
         .widgetList<Image>(find.byType(Image))
-        .map((image) => image.image)
-        .whereType<AssetImage>()
-        .map((image) => image.assetName);
+        .map(_assetName)
+        .whereType<String>();
     expect(
       assetNames,
       contains('assets/images/anniversary/anniv_event_gift.png'),
@@ -607,6 +689,17 @@ void main() {
     expect(find.text('처음으로 함께 떠났던 아주 특별한 여름 여행 기념일'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+String? _assetName(Image image) {
+  final provider = image.image;
+  if (provider is AssetImage) {
+    return provider.assetName;
+  }
+  if (provider is ResizeImage && provider.imageProvider is AssetImage) {
+    return (provider.imageProvider as AssetImage).assetName;
+  }
+  return null;
 }
 
 Future<AnniversaryTimelinePage> _fakeTimelinePage({

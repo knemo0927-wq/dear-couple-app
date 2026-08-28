@@ -10,18 +10,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 const _assetBase = 'assets/images/anniversary';
-const _moreAsset = '$_assetBase/anniv_more_dots.png';
 const _heroRingAsset = '$_assetBase/anniv_hero_ring.png';
 const _smallHeartAsset = '$_assetBase/anniv_small_heart.png';
 const _eventHeartAsset = '$_assetBase/anniv_event_heart.png';
 const _eventRingAsset = '$_assetBase/anniv_event_ring.png';
 const _eventGiftAsset = '$_assetBase/anniv_event_gift.png';
-const _bellAsset = '$_assetBase/anniv_bell.png';
-const _chevronAsset = '$_assetBase/anniv_chevron_right.png';
-const _addAsset = '$_assetBase/anniv_add_plus.png';
 const _avatarOneAsset = '$_assetBase/anniv_default_avatar_1.png';
 const _avatarTwoAsset = '$_assetBase/anniv_default_avatar_2.png';
 const _dashboardPreviewCount = 5;
+
+class _AnniversaryAsset extends StatelessWidget {
+  const _AnniversaryAsset({
+    required this.asset,
+    required this.width,
+    required this.height,
+    this.fit,
+  });
+
+  final String asset;
+  final double width;
+  final double height;
+  final BoxFit? fit;
+
+  @override
+  Widget build(BuildContext context) {
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = (width * pixelRatio).round().clamp(1, 4096).toInt();
+    final cacheHeight = (height * pixelRatio).round().clamp(1, 4096).toInt();
+    return Image.asset(
+      asset,
+      width: width,
+      height: height,
+      cacheWidth: cacheWidth,
+      cacheHeight: cacheHeight,
+      fit: fit,
+    );
+  }
+}
 
 class AnniversaryReminderPage extends ConsumerStatefulWidget {
   const AnniversaryReminderPage({this.initialEntryId, super.key});
@@ -915,7 +940,13 @@ class _AnniversaryHeader extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _AssetBackButton(onTap: onBack),
+            child: _RoundedIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              label: '뒤로가기',
+              size: 54,
+              iconSize: 22,
+              onTap: onBack,
+            ),
           ),
           Text(
             '기념일',
@@ -927,8 +958,8 @@ class _AnniversaryHeader extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: _AssetIconButton(
-              asset: _moreAsset,
+            child: _RoundedIconButton(
+              icon: Icons.more_horiz_rounded,
               label: '더보기',
               size: 54,
               iconSize: 28,
@@ -959,7 +990,13 @@ class _FullListHeader extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _AssetBackButton(onTap: onBack),
+            child: _RoundedIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              label: '뒤로가기',
+              size: 54,
+              iconSize: 22,
+              onTap: onBack,
+            ),
           ),
           Text(
             title,
@@ -970,41 +1007,6 @@ class _FullListHeader extends StatelessWidget {
                 ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AssetBackButton extends StatelessWidget {
-  const _AssetBackButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: '뒤로가기',
-      child: Semantics(
-        button: true,
-        label: '뒤로가기',
-        child: Material(
-          color: Colors.white.withValues(alpha: 0.86),
-          borderRadius: BorderRadius.circular(27),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(27),
-            onTap: onTap,
-            child: SizedBox(
-              width: 54,
-              height: 54,
-              child: Center(
-                child: RotatedBox(
-                  quarterTurns: 2,
-                  child: Image.asset(_chevronAsset, width: 22, height: 22),
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1060,11 +1062,11 @@ class _AnniversaryHeroCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(
+          const Positioned(
             right: -10,
             top: 48,
-            child: Image.asset(
-              _heroRingAsset,
+            child: _AnniversaryAsset(
+              asset: _heroRingAsset,
               width: 224,
               height: 136,
               fit: BoxFit.contain,
@@ -1123,7 +1125,11 @@ class _AnniversaryHeroCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Image.asset(_smallHeartAsset, width: 22, height: 22),
+                        const _AnniversaryAsset(
+                          asset: _smallHeartAsset,
+                          width: 22,
+                          height: 22,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 30),
@@ -1195,12 +1201,19 @@ class _AvatarImage extends StatelessWidget {
       ),
       child: ClipOval(
         child: url == null || url!.trim().isEmpty
-            ? Image.asset(asset, fit: BoxFit.cover)
+            ? _AnniversaryAsset(
+                asset: asset,
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+              )
             : Image.network(
                 url!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Image.asset(
-                  asset,
+                errorBuilder: (_, __, ___) => _AnniversaryAsset(
+                  asset: asset,
+                  width: 48,
+                  height: 48,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -1240,18 +1253,15 @@ class _HeroProfilePanel extends StatelessWidget {
                       children: [
                         _OverlappedAvatars(avatarUrls: avatarUrls),
                         const SizedBox(width: 4),
-                        Image.asset(
-                          _smallHeartAsset,
+                        const _AnniversaryAsset(
+                          asset: _smallHeartAsset,
                           width: 20,
                           height: 20,
                         ),
                         const Spacer(),
-                        _AssetIconButton(
-                          asset: _chevronAsset,
-                          label: '기념일 상세',
-                          size: 44,
+                        const _DecorativeChevron(
+                          boxSize: 44,
                           iconSize: 14,
-                          onTap: onTap,
                         ),
                       ],
                     ),
@@ -1281,7 +1291,11 @@ class _HeroProfilePanel extends StatelessWidget {
                   children: [
                     _OverlappedAvatars(avatarUrls: avatarUrls),
                     const SizedBox(width: 4),
-                    Image.asset(_smallHeartAsset, width: 20, height: 20),
+                    const _AnniversaryAsset(
+                      asset: _smallHeartAsset,
+                      width: 20,
+                      height: 20,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1316,12 +1330,9 @@ class _HeroProfilePanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                    _AssetIconButton(
-                      asset: _chevronAsset,
-                      label: '기념일 상세',
-                      size: 44,
+                    const _DecorativeChevron(
+                      boxSize: 44,
                       iconSize: 14,
-                      onTap: onTap,
                     ),
                   ],
                 ),
@@ -1365,7 +1376,7 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
         ),
-        Image.asset(_chevronAsset, width: 14, height: 14),
+        const _DecorativeChevron(iconSize: 14),
       ],
     );
   }
@@ -1473,6 +1484,7 @@ class _AnniversaryEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final eventIconSize = largeText ? 38.0 : 44.0;
     final eventIcon = Container(
       width: largeText ? 60 : 68,
       height: largeText ? 60 : 68,
@@ -1482,10 +1494,10 @@ class _AnniversaryEventTile extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 3),
       ),
       child: Center(
-        child: Image.asset(
-          iconAsset,
-          width: largeText ? 38 : 44,
-          height: largeText ? 38 : 44,
+        child: _AnniversaryAsset(
+          asset: iconAsset,
+          width: eventIconSize,
+          height: eventIconSize,
         ),
       ),
     );
@@ -1550,15 +1562,17 @@ class _AnniversaryEventTile extends StatelessWidget {
                       children: [
                         _DdayChip(label: dday),
                         const Spacer(),
-                        _AssetIconButton(
-                          asset: _bellAsset,
+                        _RoundedIconButton(
+                          icon: reminderEnabled
+                              ? Icons.notifications_rounded
+                              : Icons.notifications_none_rounded,
                           label: reminderEnabled ? '알림 켜짐' : '알림 꺼짐',
                           size: 44,
                           iconSize: 22,
-                          iconOpacity: reminderEnabled ? 1 : 0.32,
+                          toggled: reminderEnabled,
                           onTap: onBell,
                         ),
-                        Image.asset(_chevronAsset, width: 18, height: 18),
+                        const _DecorativeChevron(iconSize: 18),
                       ],
                     ),
                   ],
@@ -1606,15 +1620,17 @@ class _AnniversaryEventTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _AssetIconButton(
-                      asset: _bellAsset,
+                    _RoundedIconButton(
+                      icon: reminderEnabled
+                          ? Icons.notifications_rounded
+                          : Icons.notifications_none_rounded,
                       label: reminderEnabled ? '알림 켜짐' : '알림 꺼짐',
                       size: 44,
                       iconSize: 22,
-                      iconOpacity: reminderEnabled ? 1 : 0.32,
+                      toggled: reminderEnabled,
                       onTap: onBell,
                     ),
-                    Image.asset(_chevronAsset, width: 18, height: 18),
+                    const _DecorativeChevron(iconSize: 18),
                   ],
                 ),
         ),
@@ -1666,7 +1682,11 @@ class _EmptyAnniversaryCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Image.asset(_eventHeartAsset, width: 52, height: 52),
+          const _AnniversaryAsset(
+            asset: _eventHeartAsset,
+            width: 52,
+            height: 52,
+          ),
           const SizedBox(height: 12),
           Text(
             '등록된 기념일이 없어요',
@@ -1724,7 +1744,11 @@ class _NotificationSettingsCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Center(
-                  child: Image.asset(_bellAsset, width: 24, height: 24),
+                  child: Icon(
+                    Icons.notifications_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 24,
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1750,7 +1774,7 @@ class _NotificationSettingsCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Image.asset(_chevronAsset, width: 18, height: 18),
+              const _DecorativeChevron(iconSize: 18),
             ],
           ),
         ),
@@ -1777,7 +1801,10 @@ class _BottomAddButton extends StatelessWidget {
         opacity: onTap == null ? 0.58 : 1,
         child: Semantics(
           button: true,
+          enabled: onTap != null,
           label: label,
+          onTap: onTap,
+          excludeSemantics: true,
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -1808,7 +1835,11 @@ class _BottomAddButton extends StatelessWidget {
                                     fontWeight: FontWeight.w900,
                                   ),
                         )
-                      : Image.asset(_addAsset, width: 28, height: 28),
+                      : const Icon(
+                          Icons.add_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
                 ),
               ),
             ),
@@ -1819,32 +1850,37 @@ class _BottomAddButton extends StatelessWidget {
   }
 }
 
-class _AssetIconButton extends StatelessWidget {
-  const _AssetIconButton({
-    required this.asset,
+class _RoundedIconButton extends StatelessWidget {
+  const _RoundedIconButton({
+    required this.icon,
     required this.label,
     required this.size,
     required this.iconSize,
     required this.onTap,
-    this.iconOpacity = 1,
-  });
+    this.toggled,
+  }) : assert(size >= DearTouchTargets.minimum);
 
-  final String asset;
+  final IconData icon;
   final String label;
   final double size;
   final double iconSize;
   final VoidCallback onTap;
-  final double iconOpacity;
+  final bool? toggled;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: label,
       child: Semantics(
         button: true,
+        enabled: true,
         label: label,
+        toggled: toggled,
+        onTap: onTap,
+        excludeSemantics: true,
         child: Material(
-          color: Colors.white.withValues(alpha: 0.86),
+          color: scheme.surface.withValues(alpha: 0.86),
           borderRadius: BorderRadius.circular(size * 0.5),
           child: InkWell(
             borderRadius: BorderRadius.circular(size * 0.5),
@@ -1853,15 +1889,44 @@ class _AssetIconButton extends StatelessWidget {
               width: size,
               height: size,
               child: Center(
-                child: Opacity(
-                  opacity: iconOpacity,
-                  child: Image.asset(asset, width: iconSize, height: iconSize),
+                child: Icon(
+                  icon,
+                  color: toggled == null
+                      ? scheme.onSurface
+                      : toggled!
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                  size: iconSize,
                 ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DecorativeChevron extends StatelessWidget {
+  const _DecorativeChevron({required this.iconSize, this.boxSize});
+
+  final double iconSize;
+  final double? boxSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(
+      Icons.chevron_right_rounded,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      size: iconSize,
+    );
+    return ExcludeSemantics(
+      child: boxSize == null
+          ? icon
+          : SizedBox.square(
+              dimension: boxSize,
+              child: Center(child: icon),
+            ),
     );
   }
 }
@@ -2243,7 +2308,11 @@ class _HeroDetailSheet extends StatelessWidget {
             const SizedBox(height: 20),
             Row(
               children: [
-                Image.asset(_heroRingAsset, width: 108, height: 78),
+                const _AnniversaryAsset(
+                  asset: _heroRingAsset,
+                  width: 108,
+                  height: 78,
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -2320,8 +2389,8 @@ class _AutomaticAnniversaryDetailSheet extends StatelessWidget {
             const _SheetHandle(title: '기념일 상세'),
             const SizedBox(height: 18),
             Center(
-              child: Image.asset(
-                _iconAssetFor(entry),
+              child: _AnniversaryAsset(
+                asset: _iconAssetFor(entry),
                 width: 76,
                 height: 76,
               ),
@@ -2389,8 +2458,12 @@ class _CustomAnniversaryDetailSheet extends StatelessWidget {
           children: [
             const _SheetHandle(title: '기념일 상세'),
             const SizedBox(height: 16),
-            Center(
-              child: Image.asset(_eventGiftAsset, width: 76, height: 76),
+            const Center(
+              child: _AnniversaryAsset(
+                asset: _eventGiftAsset,
+                width: 76,
+                height: 76,
+              ),
             ),
             const SizedBox(height: 10),
             Text(
