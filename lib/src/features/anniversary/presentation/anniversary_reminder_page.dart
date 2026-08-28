@@ -19,6 +19,10 @@ const _avatarOneAsset = '$_assetBase/anniv_default_avatar_1.png';
 const _avatarTwoAsset = '$_assetBase/anniv_default_avatar_2.png';
 const _dashboardPreviewCount = 5;
 
+extension _AnniversaryThemeContext on BuildContext {
+  ColorScheme get anniversaryColors => Theme.of(this).colorScheme;
+}
+
 class _AnniversaryAsset extends StatelessWidget {
   const _AnniversaryAsset({
     required this.asset,
@@ -612,7 +616,8 @@ class _AnniversaryFullListPageState
                                           .textTheme
                                           .bodySmall
                                           ?.copyWith(
-                                            color: DearColors.muted,
+                                            color: context.anniversaryColors
+                                                .onSurfaceVariant,
                                             fontWeight: FontWeight.w700,
                                           ),
                                     ),
@@ -758,8 +763,8 @@ Future<void> _showAnniversaryEntryDetails({
             FilledButton(
               key: const ValueKey('confirm-anniversary-delete'),
               onPressed: () => Navigator.pop(dialogContext, true),
-              style:
-                  FilledButton.styleFrom(backgroundColor: DearColors.coralText),
+              style: FilledButton.styleFrom(
+                  backgroundColor: context.anniversaryColors.primary),
               child: const Text('삭제'),
             ),
           ],
@@ -951,7 +956,7 @@ class _AnniversaryHeader extends StatelessWidget {
           Text(
             '기념일',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: DearColors.ink,
+                  color: context.anniversaryColors.onSurface,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0,
                 ),
@@ -1001,7 +1006,7 @@ class _FullListHeader extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: DearColors.ink,
+                  color: context.anniversaryColors.onSurface,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0,
                 ),
@@ -1046,19 +1051,23 @@ class _AnniversaryHeroCard extends StatelessWidget {
           );
 
     return Container(
+      key: const ValueKey('anniversary-hero-surface'),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFFFF9FB), Color(0xFFFFE1EC)],
+          colors: [
+            context.anniversaryColors.surface,
+            context.anniversaryColors.primaryContainer,
+          ],
         ),
         borderRadius: BorderRadius.circular(30),
         boxShadow: dearSoftShadow(1.25),
       ),
       foregroundDecoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: const Color(0xFFFFAFC2)),
+        border: Border.all(color: context.anniversaryColors.outline),
       ),
       child: Stack(
         children: [
@@ -1083,7 +1092,7 @@ class _AnniversaryHeroCard extends StatelessWidget {
                     Text(
                       '우리의 기념일',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: DearColors.coralText,
+                            color: context.anniversaryColors.primary,
                             fontWeight: FontWeight.w900,
                           ),
                     ),
@@ -1091,8 +1100,8 @@ class _AnniversaryHeroCard extends StatelessWidget {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFB2C1),
+                      decoration: BoxDecoration(
+                        color: context.anniversaryColors.primary,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1101,7 +1110,7 @@ class _AnniversaryHeroCard extends StatelessWidget {
                       loading ? 'D+ -' : dday,
                       style:
                           Theme.of(context).textTheme.displayMedium?.copyWith(
-                                color: DearColors.ink,
+                                color: context.anniversaryColors.onSurface,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0,
                                 height: 0.98,
@@ -1119,7 +1128,8 @@ class _AnniversaryHeroCard extends StatelessWidget {
                                 .textTheme
                                 .titleSmall
                                 ?.copyWith(
-                                  color: DearColors.secondary,
+                                  color: context
+                                      .anniversaryColors.onSurfaceVariant,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -1239,7 +1249,7 @@ class _HeroProfilePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
     return Material(
-      color: Colors.white.withValues(alpha: 0.86),
+      color: context.anniversaryColors.surface.withValues(alpha: 0.92),
       child: InkWell(
         onTap: onTap,
         child: Container(
@@ -1271,7 +1281,7 @@ class _HeroProfilePanel extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: DearColors.secondary,
+                            color: context.anniversaryColors.onSurfaceVariant,
                             fontWeight: FontWeight.w800,
                           ),
                     ),
@@ -1280,7 +1290,7 @@ class _HeroProfilePanel extends StatelessWidget {
                       subtitle,
                       maxLines: 2,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: DearColors.secondary,
+                            color: context.anniversaryColors.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0,
                           ),
@@ -1309,7 +1319,8 @@ class _HeroProfilePanel extends StatelessWidget {
                                 .textTheme
                                 .titleSmall
                                 ?.copyWith(
-                                  color: DearColors.secondary,
+                                  color: context
+                                      .anniversaryColors.onSurfaceVariant,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -1322,7 +1333,8 @@ class _HeroProfilePanel extends StatelessWidget {
                                 .textTheme
                                 .labelMedium
                                 ?.copyWith(
-                                  color: DearColors.secondary,
+                                  color: context
+                                      .anniversaryColors.onSurfaceVariant,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0,
                                 ),
@@ -1361,7 +1373,7 @@ class _SectionHeader extends StatelessWidget {
           child: Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: DearColors.ink,
+                  color: context.anniversaryColors.onSurface,
                   fontWeight: FontWeight.w900,
                 ),
           ),
@@ -1370,8 +1382,8 @@ class _SectionHeader extends StatelessWidget {
           onPressed: onAction,
           child: Text(
             actionLabel,
-            style: const TextStyle(
-              color: DearColors.secondary,
+            style: TextStyle(
+              color: context.anniversaryColors.onSurfaceVariant,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1408,8 +1420,8 @@ class _TimelineEventTile extends StatelessWidget {
                 child: Container(
                   width: 7,
                   height: 7,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFB7C4),
+                  decoration: BoxDecoration(
+                    color: context.anniversaryColors.primary,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1432,22 +1444,28 @@ class _TimelineEventTile extends StatelessWidget {
                 Expanded(
                   child: Center(
                     child: showLineAbove
-                        ? Container(width: 2, color: const Color(0xFFFFD6DE))
+                        ? Container(
+                            width: 2,
+                            color: context.anniversaryColors.outlineVariant,
+                          )
                         : const SizedBox(width: 2),
                   ),
                 ),
                 Container(
                   width: 7,
                   height: 7,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFB7C4),
+                  decoration: BoxDecoration(
+                    color: context.anniversaryColors.primary,
                     shape: BoxShape.circle,
                   ),
                 ),
                 Expanded(
                   child: Center(
                     child: showLineBelow
-                        ? Container(width: 2, color: const Color(0xFFFFD6DE))
+                        ? Container(
+                            width: 2,
+                            color: context.anniversaryColors.outlineVariant,
+                          )
                         : const SizedBox(width: 2),
                   ),
                 ),
@@ -1489,9 +1507,9 @@ class _AnniversaryEventTile extends StatelessWidget {
       width: largeText ? 60 : 68,
       height: largeText ? 60 : 68,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3F6),
+        color: context.anniversaryColors.primaryContainer,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 3),
+        border: Border.all(color: context.anniversaryColors.surface, width: 3),
       ),
       child: Center(
         child: _AnniversaryAsset(
@@ -1502,7 +1520,7 @@ class _AnniversaryEventTile extends StatelessWidget {
       ),
     );
     return Material(
-      color: Colors.white,
+      color: context.anniversaryColors.surface,
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
@@ -1511,7 +1529,7 @@ class _AnniversaryEventTile extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(18, 16, 14, largeText ? 24 : 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: DearColors.line),
+            border: Border.all(color: context.anniversaryColors.outlineVariant),
             boxShadow: dearSoftShadow(0.65),
           ),
           child: largeText
@@ -1535,7 +1553,8 @@ class _AnniversaryEventTile extends StatelessWidget {
                                     .textTheme
                                     .titleSmall
                                     ?.copyWith(
-                                      color: DearColors.ink,
+                                      color:
+                                          context.anniversaryColors.onSurface,
                                       fontWeight: FontWeight.w900,
                                     ),
                               ),
@@ -1548,7 +1567,8 @@ class _AnniversaryEventTile extends StatelessWidget {
                                     .textTheme
                                     .bodySmall
                                     ?.copyWith(
-                                      color: DearColors.muted,
+                                      color: context
+                                          .anniversaryColors.onSurfaceVariant,
                                       fontWeight: FontWeight.w700,
                                     ),
                               ),
@@ -1596,7 +1616,8 @@ class _AnniversaryEventTile extends StatelessWidget {
                                       .textTheme
                                       .titleSmall
                                       ?.copyWith(
-                                        color: DearColors.ink,
+                                        color:
+                                            context.anniversaryColors.onSurface,
                                         fontWeight: FontWeight.w900,
                                       ),
                                 ),
@@ -1612,7 +1633,8 @@ class _AnniversaryEventTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: DearColors.muted,
+                                      color: context
+                                          .anniversaryColors.onSurfaceVariant,
                                       fontWeight: FontWeight.w700,
                                     ),
                           ),
@@ -1650,14 +1672,14 @@ class _DdayChip extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 54),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: DearColors.coralSoft,
+        color: context.anniversaryColors.primaryContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: DearColors.coralText,
+              color: context.anniversaryColors.primary,
               fontWeight: FontWeight.w900,
             ),
       ),
@@ -1675,9 +1697,9 @@ class _EmptyAnniversaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.anniversaryColors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: context.anniversaryColors.outlineVariant),
         boxShadow: dearSoftShadow(0.6),
       ),
       child: Column(
@@ -1691,7 +1713,7 @@ class _EmptyAnniversaryCard extends StatelessWidget {
           Text(
             '등록된 기념일이 없어요',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: DearColors.ink,
+                  color: context.anniversaryColors.onSurface,
                   fontWeight: FontWeight.w900,
                 ),
           ),
@@ -1700,7 +1722,7 @@ class _EmptyAnniversaryCard extends StatelessWidget {
             '함께 기억하고 싶은 날을 추가해 주세요.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: DearColors.muted,
+                  color: context.anniversaryColors.onSurfaceVariant,
                   fontWeight: FontWeight.w700,
                 ),
           ),
@@ -1723,7 +1745,8 @@ class _NotificationSettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFFFF8FA),
+      key: const ValueKey('anniversary-notification-card'),
+      color: context.anniversaryColors.surface,
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
@@ -1732,7 +1755,7 @@ class _NotificationSettingsCard extends StatelessWidget {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: DearColors.line),
+            border: Border.all(color: context.anniversaryColors.outlineVariant),
           ),
           child: Row(
             children: [
@@ -1740,7 +1763,7 @@ class _NotificationSettingsCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.anniversaryColors.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Center(
@@ -1759,7 +1782,7 @@ class _NotificationSettingsCard extends StatelessWidget {
                     Text(
                       '알림 설정',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: DearColors.ink,
+                            color: context.anniversaryColors.onSurface,
                             fontWeight: FontWeight.w900,
                           ),
                     ),
@@ -1767,7 +1790,7 @@ class _NotificationSettingsCard extends StatelessWidget {
                     Text(
                       '기념일 전에 미리 알려드릴게요',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: DearColors.muted,
+                            color: context.anniversaryColors.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -1819,7 +1842,8 @@ class _BottomAddButton extends StatelessWidget {
                   gradient: DearGradients.cta,
                   boxShadow: [
                     BoxShadow(
-                      color: DearColors.coral.withValues(alpha: 0.28),
+                      color: context.anniversaryColors.primary
+                          .withValues(alpha: 0.28),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),
@@ -2152,7 +2176,7 @@ class _AnniversaryEditorSheetState
                 value: _repeat == AnniversaryRepeat.yearly,
                 title: const Text('매년 반복'),
                 subtitle: const Text('해마다 같은 날짜에 다시 보여요'),
-                activeThumbColor: DearColors.coral,
+                activeThumbColor: context.anniversaryColors.primary,
                 onChanged: (value) => setState(
                   () => _repeat =
                       value ? AnniversaryRepeat.yearly : AnniversaryRepeat.none,
@@ -2168,7 +2192,7 @@ class _AnniversaryEditorSheetState
                     value: _reminderEnabled,
                     title: const Text('개별 알림'),
                     subtitle: const Text('이 기념일을 미리 알려드려요'),
-                    activeThumbColor: DearColors.coral,
+                    activeThumbColor: context.anniversaryColors.primary,
                     onChanged: (value) =>
                         setState(() => _reminderEnabled = value),
                   ),
@@ -2202,8 +2226,8 @@ class _AnniversaryEditorSheetState
                       title: const Text('알림 시간'),
                       trailing: Text(
                         _hourLabel(_reminderHour),
-                        style: const TextStyle(
-                          color: DearColors.coralText,
+                        style: TextStyle(
+                          color: context.anniversaryColors.primary,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -2220,7 +2244,7 @@ class _AnniversaryEditorSheetState
                 key: const ValueKey('save-anniversary'),
                 onPressed: _submit,
                 style: FilledButton.styleFrom(
-                  backgroundColor: DearColors.coralText,
+                  backgroundColor: context.anniversaryColors.primary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -2324,7 +2348,7 @@ class _HeroDetailSheet extends StatelessWidget {
                             : anniversaryDdayLabel(anniversaryDate!),
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: DearColors.ink,
+                                  color: context.anniversaryColors.onSurface,
                                   fontWeight: FontWeight.w900,
                                 ),
                       ),
@@ -2333,7 +2357,8 @@ class _HeroDetailSheet extends StatelessWidget {
                         anniversaryDate == null
                             ? '기준일을 설정하면 100일과 주년을 자동으로 계산해요.'
                             : '${anniversaryDateKoreanLabel(anniversaryDate!)}부터 함께',
-                        style: const TextStyle(color: DearColors.muted),
+                        style: TextStyle(
+                            color: context.anniversaryColors.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -2400,7 +2425,7 @@ class _AutomaticAnniversaryDetailSheet extends StatelessWidget {
               entry.title,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: DearColors.ink,
+                    color: context.anniversaryColors.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -2408,13 +2433,15 @@ class _AutomaticAnniversaryDetailSheet extends StatelessWidget {
             Text(
               '${_dateWithWeekdayLabel(entry.eventDate)} · ${_dday(entry.eventDate)}',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: DearColors.muted),
+              style:
+                  TextStyle(color: context.anniversaryColors.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
             Text(
               description,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: DearColors.secondary),
+              style:
+                  TextStyle(color: context.anniversaryColors.onSurfaceVariant),
             ),
             const SizedBox(height: 22),
             FilledButton(
@@ -2470,7 +2497,7 @@ class _CustomAnniversaryDetailSheet extends StatelessWidget {
               item.title,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: DearColors.ink,
+                    color: context.anniversaryColors.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
             ),
@@ -2478,7 +2505,8 @@ class _CustomAnniversaryDetailSheet extends StatelessWidget {
             Text(
               '${_dateWithWeekdayLabel(occurrenceDate)} · ${_dday(occurrenceDate)}',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: DearColors.muted),
+              style:
+                  TextStyle(color: context.anniversaryColors.onSurfaceVariant),
             ),
             const SizedBox(height: 18),
             _DetailInfoRow(
@@ -2495,13 +2523,14 @@ class _CustomAnniversaryDetailSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: DearColors.blush.withValues(alpha: 0.48),
+                  color: context.anniversaryColors.surfaceContainer
+                      .withValues(alpha: 0.48),
                   borderRadius: BorderRadius.circular(DearRadii.medium),
                 ),
                 child: Text(
                   item.note!,
-                  style: const TextStyle(
-                    color: DearColors.secondary,
+                  style: TextStyle(
+                    color: context.anniversaryColors.onSurfaceVariant,
                     height: 1.45,
                   ),
                 ),
@@ -2539,9 +2568,9 @@ class _BottomSheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFFCFD),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.anniversaryColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: child,
     );
@@ -2565,7 +2594,7 @@ class _SheetHandle extends StatelessWidget {
           width: 42,
           height: 4,
           decoration: BoxDecoration(
-            color: DearColors.line,
+            color: context.anniversaryColors.outlineVariant,
             borderRadius: BorderRadius.circular(999),
           ),
         ),
@@ -2574,7 +2603,7 @@ class _SheetHandle extends StatelessWidget {
           title,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: DearColors.ink,
+                color: context.anniversaryColors.onSurface,
                 fontWeight: FontWeight.w900,
               ),
         ),
@@ -2601,8 +2630,8 @@ class _SheetActionTile extends StatelessWidget {
     return ListTile(
       minLeadingWidth: 44,
       leading: CircleAvatar(
-        backgroundColor: DearColors.coralSoft,
-        foregroundColor: DearColors.coral,
+        backgroundColor: context.anniversaryColors.primaryContainer,
+        foregroundColor: context.anniversaryColors.primary,
         child: Icon(icon),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -2622,9 +2651,9 @@ class _EditorOptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.anniversaryColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: context.anniversaryColors.outlineVariant),
       ),
       child: child,
     );
@@ -2645,14 +2674,16 @@ class _DetailInfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 82,
-            child: Text(label, style: const TextStyle(color: DearColors.muted)),
+            child: Text(label,
+                style: TextStyle(
+                    color: context.anniversaryColors.onSurfaceVariant)),
           ),
           Expanded(
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: DearColors.ink,
+              style: TextStyle(
+                color: context.anniversaryColors.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -2677,9 +2708,9 @@ class _AnniversaryListSkeleton extends StatelessWidget {
           height: 102,
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.72),
+            color: context.anniversaryColors.surface.withValues(alpha: 0.72),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: DearColors.line),
+            border: Border.all(color: context.anniversaryColors.outlineVariant),
           ),
           child: Row(
             children: [
@@ -2687,8 +2718,8 @@ class _AnniversaryListSkeleton extends StatelessWidget {
               Container(
                 width: 62,
                 height: 62,
-                decoration: const BoxDecoration(
-                  color: DearColors.coralSoft,
+                decoration: BoxDecoration(
+                  color: context.anniversaryColors.primaryContainer,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -2701,13 +2732,13 @@ class _AnniversaryListSkeleton extends StatelessWidget {
                     Container(
                       width: 112,
                       height: 14,
-                      color: DearColors.coralSoft,
+                      color: context.anniversaryColors.primaryContainer,
                     ),
                     const SizedBox(height: 10),
                     Container(
                       width: 150,
                       height: 11,
-                      color: const Color(0xFFF4E9ED),
+                      color: context.anniversaryColors.surfaceContainerHigh,
                     ),
                   ],
                 ),
@@ -2732,19 +2763,19 @@ class _AnniversaryPageLoadingState extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _loadingCircle(54),
+              _loadingCircle(context, 54),
               Container(
                 width: 82,
                 height: 24,
-                decoration: _loadingDecoration(12),
+                decoration: _loadingDecoration(context, 12),
               ),
-              _loadingCircle(54),
+              _loadingCircle(context, 54),
             ],
           ),
           const SizedBox(height: 22),
           Container(
             height: 320,
-            decoration: _loadingDecoration(30),
+            decoration: _loadingDecoration(context, 30),
           ),
           const SizedBox(height: 28),
           Align(
@@ -2752,7 +2783,7 @@ class _AnniversaryPageLoadingState extends StatelessWidget {
             child: Container(
               width: 150,
               height: 22,
-              decoration: _loadingDecoration(10),
+              decoration: _loadingDecoration(context, 10),
             ),
           ),
           const SizedBox(height: 14),
@@ -2762,22 +2793,25 @@ class _AnniversaryPageLoadingState extends StatelessWidget {
     );
   }
 
-  static Widget _loadingCircle(double size) {
+  static Widget _loadingCircle(BuildContext context, double size) {
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        color: DearColors.coralSoft,
+      decoration: BoxDecoration(
+        color: context.anniversaryColors.primaryContainer,
         shape: BoxShape.circle,
       ),
     );
   }
 
-  static BoxDecoration _loadingDecoration(double radius) {
+  static BoxDecoration _loadingDecoration(
+    BuildContext context,
+    double radius,
+  ) {
     return BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.72),
+      color: context.anniversaryColors.surface.withValues(alpha: 0.72),
       borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: DearColors.line),
+      border: Border.all(color: context.anniversaryColors.outlineVariant),
     );
   }
 }
@@ -2808,29 +2842,29 @@ class _AnniversaryErrorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.anniversaryColors.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: context.anniversaryColors.outlineVariant),
       ),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.cloud_off_rounded,
             size: 38,
-            color: DearColors.coral,
+            color: context.anniversaryColors.primary,
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             '기념일을 불러오지 못했어요',
             style: TextStyle(
-              color: DearColors.ink,
+              color: context.anniversaryColors.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             '연결을 확인한 뒤 다시 시도해 주세요.',
-            style: TextStyle(color: DearColors.muted),
+            style: TextStyle(color: context.anniversaryColors.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           TextButton(onPressed: onRetry, child: const Text('다시 시도')),

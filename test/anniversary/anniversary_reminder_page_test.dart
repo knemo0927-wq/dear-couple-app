@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/anniversary/data/anniversary_providers.dart';
 import 'package:couple_chat_app/src/features/anniversary/data/anniversary_repository.dart';
 import 'package:couple_chat_app/src/features/anniversary/presentation/anniversary_reminder_page.dart';
@@ -687,6 +688,95 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -520));
     await tester.pumpAndSettle();
     expect(find.text('처음으로 함께 떠났던 아주 특별한 여름 여행 기념일'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 기념일 화면은 hero·카드·텍스트에 semantic 색을 사용한다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final theme = AppTheme.dark();
+    final start = DateUtils.dateOnly(
+      DateTime.now().subtract(const Duration(days: 100)),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myProfileProvider.overrideWith(
+            (ref) async => const ProfileInfo(
+              userId: 'user-1',
+              nickname: '하루',
+              pairingCode: 'ABCD',
+              coupleId: 'couple-1',
+              avatarPath: null,
+            ),
+          ),
+          anniversaryDateProvider.overrideWith((ref) => Stream.value(start)),
+          coupleAvatarUrlMapProvider.overrideWith(
+            (ref, coupleId) => Stream.value(const <String, String>{}),
+          ),
+          anniversaryItemsProvider.overrideWith(
+            (ref, coupleId) => Stream.value(const <AnniversaryItem>[]),
+          ),
+          fetchAnniversaryTimelinePageProvider.overrideWithValue(
+            ({
+              required coupleId,
+              cursor,
+              pageSize = 15,
+            }) async =>
+                const AnniversaryTimelinePage(
+              items: [],
+              nextCursor: null,
+              hasMore: false,
+            ),
+          ),
+          notificationPreferencesProvider.overrideWith(
+            (ref, userId) =>
+                Stream.value(NotificationPreferences.defaults(userId)),
+          ),
+        ],
+        child: MaterialApp(
+          theme: theme,
+          home: const AnniversaryReminderPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final hero = tester.widget<Container>(
+      find.byKey(const ValueKey('anniversary-hero-surface')),
+    );
+    final gradient =
+        (hero.decoration! as BoxDecoration).gradient! as LinearGradient;
+    expect(gradient.colors.first, theme.colorScheme.surface);
+    expect(gradient.colors.last, theme.colorScheme.primaryContainer);
+    expect(
+      tester.widget<Text>(find.text('우리의 기념일')).style?.color,
+      theme.colorScheme.primary,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.text('${anniversaryDateKoreanLabel(start)}부터 함께'),
+          )
+          .style
+          ?.color,
+      theme.colorScheme.onSurfaceVariant,
+    );
+
+    final notificationCard =
+        find.byKey(const ValueKey('anniversary-notification-card'));
+    await tester.scrollUntilVisible(
+      notificationCard,
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      tester.widget<Material>(notificationCard).color,
+      theme.colorScheme.surface,
+    );
     expect(tester.takeException(), isNull);
   });
 }
