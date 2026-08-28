@@ -1,3 +1,4 @@
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
 import 'package:couple_chat_app/src/features/auth/presentation/auth_gate.dart';
@@ -418,5 +419,58 @@ void main() {
     expect(find.byKey(const Key('auth-email-field')), findsOneWidget);
     expect(find.byKey(const Key('apple-sign-in-button')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 인증 화면은 semantic text·surface 색과 Reduce Motion을 사용한다',
+      (tester) async {
+    final router = buildRouter();
+    addTearDown(router.dispose);
+    final theme = AppTheme.dark();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSignInProvider.overrideWithValue(({
+            required String email,
+            required String password,
+          }) async {}),
+        ],
+        child: MaterialApp.router(
+          theme: theme,
+          routerConfig: router,
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(find.text('둘만의 공간')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    expect(
+      tester.widget<Text>(find.text('함께 나누고, 함께 쌓아가는 우리 이야기')).style?.color,
+      theme.colorScheme.onSurfaceVariant,
+    );
+    final selectedTab = find
+        .ancestor(
+          of: find.text('로그인').first,
+          matching: find.byType(AnimatedContainer),
+        )
+        .first;
+    expect(
+        tester.widget<AnimatedContainer>(selectedTab).duration, Duration.zero);
+    final appleButton = tester.widget<OutlinedButton>(
+      find.byKey(const Key('apple-sign-in-button')),
+    );
+    expect(
+      appleButton.style?.backgroundColor?.resolve({}),
+      theme.colorScheme.surface.withValues(alpha: 0.9),
+    );
   });
 }

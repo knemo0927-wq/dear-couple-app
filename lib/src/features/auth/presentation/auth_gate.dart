@@ -8,6 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+extension _AuthThemeContext on BuildContext {
+  ColorScheme get authColors => Theme.of(this).colorScheme;
+}
+
 class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key});
 
@@ -318,7 +322,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                               ? theme.textTheme.displaySmall
                               : theme.textTheme.displayMedium)
                           ?.copyWith(
-                        color: DearColors.coralText,
+                        color: context.authColors.primary,
                         fontWeight: FontWeight.w300,
                         letterSpacing: 0,
                       ),
@@ -331,7 +335,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                               ? theme.textTheme.titleLarge
                               : theme.textTheme.headlineSmall)
                           ?.copyWith(
-                        color: DearColors.ink,
+                        color: context.authColors.onSurface,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -343,7 +347,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                               ? theme.textTheme.bodyMedium
                               : theme.textTheme.bodyLarge)
                           ?.copyWith(
-                        color: DearColors.muted,
+                        color: context.authColors.onSurfaceVariant,
                       ),
                     ),
                     SizedBox(height: formGap),
@@ -467,7 +471,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                           child: TextButton(
                             onPressed: _submitting ? null : _resetPassword,
                             style: TextButton.styleFrom(
-                              foregroundColor: DearColors.secondary,
+                              foregroundColor:
+                                  context.authColors.onSurfaceVariant,
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(44, 44),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -479,7 +484,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         Text(
                           '6자 이상의 비밀번호를 사용해 주세요.',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: DearColors.secondary,
+                            color: context.authColors.onSurfaceVariant,
                           ),
                         ),
                       SizedBox(height: buttonGap),
@@ -519,20 +524,24 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       SizedBox(height: isCompactHeight ? 20 : 28),
                       Row(
                         children: [
-                          const Expanded(
-                            child: Divider(color: DearColors.line),
+                          Expanded(
+                            child: Divider(
+                              color: context.authColors.outlineVariant,
+                            ),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Text(
                               '또는',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: DearColors.disabled,
+                                color: context.authColors.onSurfaceVariant,
                               ),
                             ),
                           ),
-                          const Expanded(
-                            child: Divider(color: DearColors.line),
+                          Expanded(
+                            child: Divider(
+                              color: context.authColors.outlineVariant,
+                            ),
                           ),
                         ],
                       ),
@@ -541,9 +550,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         key: const Key('apple-sign-in-button'),
                         onPressed: _submitting ? null : _startAppleSignIn,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: DearColors.ink,
-                          backgroundColor: Colors.white.withValues(alpha: 0.9),
-                          side: const BorderSide(color: DearColors.line),
+                          foregroundColor: context.authColors.onSurface,
+                          backgroundColor:
+                              context.authColors.surface.withValues(alpha: 0.9),
+                          side: BorderSide(color: context.authColors.outline),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(18),
                           ),
@@ -651,7 +661,7 @@ class _EmailVerificationPendingCard extends StatelessWidget {
             '이메일을 확인해 주세요',
             textAlign: TextAlign.center,
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: DearColors.ink,
+              color: context.authColors.onSurface,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -660,7 +670,7 @@ class _EmailVerificationPendingCard extends StatelessWidget {
             email,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: DearColors.coralText,
+              color: context.authColors.primary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -669,7 +679,7 @@ class _EmailVerificationPendingCard extends StatelessWidget {
             '보내드린 인증 링크를 누른 뒤 로그인해 주세요.\n메일이 보이지 않으면 스팸함도 확인해 주세요.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: DearColors.secondary,
+              color: context.authColors.onSurfaceVariant,
               height: 1.45,
             ),
           ),
@@ -701,9 +711,9 @@ class _AuthModeTabs extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.36),
+        color: context.authColors.surfaceContainer.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: DearColors.line),
+        border: Border.all(color: context.authColors.outlineVariant),
       ),
       child: Row(
         children: [
@@ -745,12 +755,12 @@ class _AuthModeTab extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: enabled ? onTap : null,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
+          duration: DearMotion.duration(context, DearMotion.exit),
           height: 54,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected
-                ? Colors.white.withValues(alpha: 0.94)
+                ? context.authColors.surface.withValues(alpha: 0.94)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
             boxShadow: selected ? dearSoftShadow(0.35) : null,
@@ -758,7 +768,9 @@ class _AuthModeTab extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? DearColors.coral : DearColors.muted,
+                  color: selected
+                      ? context.authColors.primary
+                      : context.authColors.onSurfaceVariant,
                   fontWeight: FontWeight.w800,
                 ),
           ),
@@ -980,7 +992,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                           '둘이 연결되면\n우리만의 공간이 열려요',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.headlineSmall?.copyWith(
-                            color: DearColors.ink,
+                            color: context.authColors.onSurface,
                             fontWeight: FontWeight.w800,
                             height: 1.28,
                           ),
@@ -990,7 +1002,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                           '초대 코드를 공유하고 서로 연결해 보세요',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: DearColors.secondary,
+                            color: context.authColors.onSurfaceVariant,
                             height: 1.45,
                           ),
                         ),
@@ -1001,7 +1013,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                   DearCard(
                     padding: const EdgeInsets.all(18),
                     radius: DearRadii.large,
-                    color: Colors.white.withValues(alpha: 0.9),
+                    color: context.authColors.surface.withValues(alpha: 0.9),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1023,9 +1035,11 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                             vertical: 26,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.78),
+                            color: context.authColors.surfaceContainerLow
+                                .withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: DearColors.line),
+                            border: Border.all(
+                                color: context.authColors.outlineVariant),
                           ),
                           child: Column(
                             children: [
@@ -1038,7 +1052,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                                     ?.copyWith(
                                   letterSpacing: usesLargeTextLayout ? 2 : 7,
                                   fontWeight: FontWeight.w900,
-                                  color: DearColors.coralText,
+                                  color: context.authColors.primary,
                                   height: 1,
                                 ),
                               ),
@@ -1046,11 +1060,13 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                               Text(
                                 '이 코드를 상대방에게 공유해 주세요',
                                 style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: DearColors.secondary,
+                                  color: context.authColors.onSurfaceVariant,
                                 ),
                               ),
                               const SizedBox(height: 22),
-                              const Divider(color: DearColors.line),
+                              Divider(
+                                color: context.authColors.outlineVariant,
+                              ),
                               const SizedBox(height: 14),
                               _PairingInviteActions(
                                 stacked: usesLargeTextLayout,
@@ -1083,7 +1099,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                   DearCard(
                     padding: const EdgeInsets.all(18),
                     radius: DearRadii.large,
-                    color: Colors.white.withValues(alpha: 0.9),
+                    color: context.authColors.surface.withValues(alpha: 0.9),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -1098,7 +1114,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                               child: Text(
                                 '상대 코드 입력',
                                 style: theme.textTheme.titleMedium?.copyWith(
-                                  color: DearColors.ink,
+                                  color: context.authColors.onSurface,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -1109,7 +1125,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                         Text(
                           '상대방이 보여주는 코드를 입력해 주세요',
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: DearColors.secondary,
+                            color: context.authColors.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -1140,7 +1156,8 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                   DearCard(
                     padding: const EdgeInsets.all(18),
                     radius: DearRadii.large,
-                    color: DearColors.blush.withValues(alpha: 0.9),
+                    color: context.authColors.surfaceContainer
+                        .withValues(alpha: 0.9),
                     shadowOpacity: 0.35,
                     child: Row(
                       children: [
@@ -1153,7 +1170,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                               Text(
                                 '연결 대기 중',
                                 style: theme.textTheme.titleMedium?.copyWith(
-                                  color: DearColors.ink,
+                                  color: context.authColors.onSurface,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -1161,7 +1178,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                               Text(
                                 '상대방이 코드를 입력하면 연결이 완료돼요',
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: DearColors.secondary,
+                                  color: context.authColors.onSurfaceVariant,
                                   height: 1.35,
                                 ),
                               ),
@@ -1172,12 +1189,13 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.8),
+                            color: context.authColors.surfaceContainerHigh
+                                .withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.circle,
-                            color: DearColors.coral,
+                            color: context.authColors.primary,
                             size: 14,
                           ),
                         ),
@@ -1190,10 +1208,10 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                     shadowOpacity: 0.25,
                     child: Row(
                       children: [
-                        const DearIconBubble(
+                        DearIconBubble(
                           icon: Icons.info_outline_rounded,
                           size: 48,
-                          background: DearColors.blushDeep,
+                          background: context.authColors.primaryContainer,
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -1201,7 +1219,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
                             '초대 코드는 상대방을 확인한 뒤 직접 전달해 주세요.\n'
                             '코드는 24시간 뒤 만료되며, 새 코드를 만들거나 연결하면 기존 코드는 사용할 수 없어요.',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: DearColors.ink,
+                              color: context.authColors.onSurface,
                               fontWeight: FontWeight.w700,
                               height: 1.35,
                             ),
@@ -1237,7 +1255,7 @@ class _PairingInviteHeader extends StatelessWidget {
     return Text(
       '내 초대 코드',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: DearColors.ink,
+            color: context.authColors.onSurface,
             fontWeight: FontWeight.w900,
           ),
     );
@@ -1425,11 +1443,13 @@ class _PairingCodeInput extends StatelessWidget {
                           padding: EdgeInsets.only(right: index == 3 ? 0 : 8),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.86),
+                              color: context.authColors.surface
+                                  .withValues(alpha: 0.9),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color:
-                                    active ? DearColors.coral : DearColors.line,
+                                color: active
+                                    ? context.authColors.primary
+                                    : context.authColors.outlineVariant,
                                 width: active ? 1.6 : 1,
                               ),
                             ),
@@ -1440,7 +1460,7 @@ class _PairingCodeInput extends StatelessWidget {
                                     .textTheme
                                     .headlineSmall
                                     ?.copyWith(
-                                      color: DearColors.coralText,
+                                      color: context.authColors.primary,
                                       fontWeight: FontWeight.w800,
                                     ),
                               ),
@@ -1467,7 +1487,7 @@ class _PairingCodeInput extends StatelessWidget {
                     onChanged: onChanged,
                     onSubmitted: (_) => onSubmitted(),
                     style: const TextStyle(color: Colors.transparent),
-                    cursorColor: DearColors.coral,
+                    cursorColor: context.authColors.primary,
                     decoration: const InputDecoration(
                       counterText: '',
                       border: InputBorder.none,

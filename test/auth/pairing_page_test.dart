@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
 import 'package:couple_chat_app/src/features/auth/presentation/auth_gate.dart';
@@ -347,6 +348,52 @@ void main() {
 
     expect(guidance, findsOneWidget);
     expect(find.textContaining('암호화'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 페어링 화면은 카드 안 텍스트와 코드 입력을 semantic 색으로 표시한다', (tester) async {
+    final theme = AppTheme.dark();
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, __) => const PairingPage()),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myProfileProvider.overrideWith(
+            (ref) async => const ProfileInfo(
+              userId: 'u1',
+              nickname: '테스터',
+              pairingCode: 'ABCD',
+              coupleId: null,
+              avatarPath: null,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(theme: theme, routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final codeInput = find.byKey(const Key('pairing-code-semantics'));
+    await tester.scrollUntilVisible(
+      codeInput,
+      320,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      tester.widget<Text>(find.text('상대 코드 입력')).style?.color,
+      theme.colorScheme.onSurface,
+    );
+    expect(
+      tester.widget<Text>(find.text('상대방이 보여주는 코드를 입력해 주세요')).style?.color,
+      theme.colorScheme.onSurfaceVariant,
+    );
+    expect(codeInput, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
