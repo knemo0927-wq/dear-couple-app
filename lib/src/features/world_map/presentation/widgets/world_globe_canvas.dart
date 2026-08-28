@@ -121,10 +121,13 @@ class _WorldGlobeCanvasState extends State<WorldGlobeCanvas> {
       }
     }
     return Semantics(
+      key: const ValueKey('world-map-canvas-semantics'),
       container: true,
+      excludeSemantics: true,
+      image: true,
       label:
-          '세계 여행 지도. 전체 ${widget.shapes.length}개 국가 중 ${widget.visitColorsByCode.length}개 국가 방문.${selectedName == null ? '' : ' 선택한 국가 $selectedName.'}${widget.currentLocationLat == null ? '' : ' 현재 위치 표시 중.'}',
-      hint: '지구본을 드래그하거나 국가를 선택할 수 있어요.',
+          '세계 여행 지도 시각적 탐색용 캔버스. 전체 ${widget.shapes.length}개 국가 중 ${widget.visitColorsByCode.length}개 국가 방문.${selectedName == null ? '' : ' 선택한 국가 $selectedName.'}${widget.currentLocationLat == null ? '' : ' 현재 위치 표시 중.'}',
+      hint: '지구본은 드래그하거나 확대해 탐색합니다. 화면 읽기 사용자는 장소 목록 열기 버튼으로 국가를 선택하세요.',
       child: GestureDetector(
         onPanStart: (details) => _lastLocal = details.localPosition,
         onPanUpdate: (details) {

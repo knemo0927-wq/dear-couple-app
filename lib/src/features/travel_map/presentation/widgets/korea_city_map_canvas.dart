@@ -218,36 +218,46 @@ class KoreaCityMapCanvas extends StatelessWidget {
     }
 
     _geoCache ??= _KoreaGeoMapData.load();
+    String? selectedCityName;
+    for (final city in cities) {
+      if (city.id == selectedCityId) {
+        selectedCityName = city.name;
+        break;
+      }
+    }
 
-    return FutureBuilder<_KoreaGeoMapData>(
-      future: _geoCache,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const Center(child: Text('지도 데이터를 불러오지 못했어요.'));
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return Semantics(
+      key: const ValueKey('korea-map-canvas-semantics'),
+      container: true,
+      excludeSemantics: true,
+      image: true,
+      label:
+          '대한민국 여행 지도 시각적 탐색용 캔버스. 전체 ${cities.length}개 지역 중 ${colorByCityId.length}개 지역 방문.${selectedCityName == null ? '' : ' 선택한 지역 $selectedCityName.'}${currentLocationLngLat == null ? '' : ' 현재 위치 표시 중.'}',
+      hint: '지도는 확대하거나 이동해 탐색합니다. 화면 읽기 사용자는 장소 목록 열기 버튼으로 지역을 선택하세요.',
+      child: FutureBuilder<_KoreaGeoMapData>(
+        future: _geoCache,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(child: Text('지도 데이터를 불러오지 못했어요.'));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        final geo = snapshot.data!;
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final size = Size(
-              constraints.maxWidth.isFinite ? constraints.maxWidth : 360,
-              constraints.maxHeight.isFinite ? constraints.maxHeight : 520,
-            );
-            final prepared = _preparedMap(
-              size: size,
-              geo: geo,
-              cities: cities,
-            );
+          final geo = snapshot.data!;
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final size = Size(
+                constraints.maxWidth.isFinite ? constraints.maxWidth : 360,
+                constraints.maxHeight.isFinite ? constraints.maxHeight : 520,
+              );
+              final prepared = _preparedMap(
+                size: size,
+                geo: geo,
+                cities: cities,
+              );
 
-            return Semantics(
-              container: true,
-              label:
-                  '대한민국 여행 지도. 전체 ${cities.length}개 지역 중 ${colorByCityId.length}개 지역 방문.${currentLocationLngLat == null ? '' : ' 현재 위치 표시 중.'}',
-              hint: '지도를 확대하거나 이동한 뒤 지역을 선택할 수 있어요.',
-              child: GestureDetector(
+              return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTapDown: (details) {
                   final local = details.localPosition;
@@ -279,11 +289,11 @@ class KoreaCityMapCanvas extends StatelessWidget {
                           ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

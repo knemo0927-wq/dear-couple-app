@@ -14,6 +14,7 @@ import 'package:couple_chat_app/src/features/world_map/data/world_map_repository
 import 'package:couple_chat_app/src/features/world_map/presentation/world_map_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -403,6 +404,211 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('375pt·200% 국내 지도는 캔버스를 설명하고 44pt 장소 목록을 연다', (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myProfileProvider.overrideWith((ref) async => profile),
+          travelCitiesProvider.overrideWith(
+            (ref) async => const [
+              TravelCity(
+                id: 'seoul',
+                code: 'METRO_11',
+                name: '서울',
+                regionGroup: '서울',
+                centerLat: 37.5665,
+                centerLng: 126.978,
+                sortOrder: 1,
+              ),
+              TravelCity(
+                id: 'busan',
+                code: 'METRO_21',
+                name: '부산',
+                regionGroup: '부산',
+                centerLat: 35.1796,
+                centerLng: 129.0756,
+                sortOrder: 2,
+              ),
+            ],
+          ),
+          travelCityVisitsProvider.overrideWith(
+            (ref, coupleId) => Stream.value(const <TravelCityVisit>[]),
+          ),
+        ],
+        child: const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(375, 812),
+              textScaler: TextScaler.linear(2),
+            ),
+            child: TravelMapPage(),
+          ),
+        ),
+      ),
+    );
+
+    const canvasKey = ValueKey('korea-map-canvas-semantics');
+    const launcherKey = ValueKey('travel-map-place-list-launcher-semantics');
+    await _pumpUntilFound(tester, find.byKey(canvasKey));
+    await _pumpUntilFound(tester, find.byKey(launcherKey));
+
+    final canvas = tester.getSemantics(find.byKey(canvasKey));
+    expect(canvas.label, contains('시각적 탐색용 캔버스'));
+    expect(canvas.hint, contains('장소 목록 열기'));
+    expect(canvas.getSemanticsData().flagsCollection.isImage, isTrue);
+
+    final launcher = tester.getSemantics(find.byKey(launcherKey));
+    expect(launcher.label, '장소 목록 열기');
+    expect(launcher.getSemanticsData().flagsCollection.isButton, isTrue);
+    expect(
+      launcher.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    expect(tester.getSize(find.byKey(launcherKey)).height,
+        greaterThanOrEqualTo(44));
+    expect(
+      find.ancestor(
+          of: find.byKey(launcherKey), matching: find.byType(SafeArea)),
+      findsWidgets,
+    );
+
+    final launcherRect = tester.getRect(find.byKey(launcherKey));
+    final progressRect = tester.getRect(
+      find.byKey(const ValueKey('travel-map-progress-card')),
+    );
+    final zoomRect = tester.getRect(
+      find.byKey(const ValueKey('travel-map-zoom-controls')),
+    );
+    final editorRect = tester.getRect(
+      find.byKey(const ValueKey('travel-map-editor-collapsed')),
+    );
+    expect(launcherRect.bottom, lessThanOrEqualTo(progressRect.top));
+    expect(zoomRect.overlaps(editorRect), isFalse);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey('travel-map-search-launcher')),
+    );
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('travel-place-seoul')),
+    );
+    expect(find.byKey(const ValueKey('travel-place-seoul')), findsOneWidget);
+    expect(find.byKey(const ValueKey('travel-place-busan')), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('가로·200% 세계 지도는 overlay가 겹치지 않고 편집 중에도 장소 목록을 연다',
+      (tester) async {
+    tester.view.physicalSize = const Size(812, 375);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myProfileProvider.overrideWith((ref) async => profile),
+          worldCountriesProvider.overrideWith(
+            (ref) async => const [
+              WorldCountry(
+                code: 'KR',
+                iso3: 'KOR',
+                nameKo: '대한민국',
+                nameEn: 'South Korea',
+                centerLat: 36.5,
+                centerLng: 127.8,
+                sortOrder: 1,
+              ),
+            ],
+          ),
+          worldCountryVisitsProvider.overrideWith(
+            (ref, coupleId) => Stream.value(const <WorldCountryVisit>[]),
+          ),
+          worldCountryPhotosProvider.overrideWith(
+            (ref, args) => Stream.value(const <WorldCountryPhoto>[]),
+          ),
+        ],
+        child: const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(812, 375),
+              textScaler: TextScaler.linear(2),
+            ),
+            child: WorldMapPage(),
+          ),
+        ),
+      ),
+    );
+
+    const canvasKey = ValueKey('world-map-canvas-semantics');
+    const launcherKey = ValueKey('travel-map-place-list-launcher-semantics');
+    await _pumpUntilFound(tester, find.byKey(canvasKey));
+    await _pumpUntilFound(tester, find.byKey(launcherKey));
+
+    final canvas = tester.getSemantics(find.byKey(canvasKey));
+    expect(canvas.label, contains('시각적 탐색용 캔버스'));
+    expect(canvas.hint, contains('장소 목록 열기'));
+    expect(canvas.getSemanticsData().flagsCollection.isImage, isTrue);
+
+    final launcherRect = tester.getRect(find.byKey(launcherKey));
+    final progressRect = tester.getRect(
+      find.byKey(const ValueKey('travel-map-progress-card')),
+    );
+    final zoomRect = tester.getRect(
+      find.byKey(const ValueKey('travel-map-zoom-controls')),
+    );
+    expect(launcherRect.right, lessThanOrEqualTo(progressRect.left));
+    expect(progressRect.right, lessThanOrEqualTo(zoomRect.left));
+    expect(launcherRect.height, greaterThanOrEqualTo(44));
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey('travel-map-search-launcher')),
+    );
+    final koreaTile = find.byKey(const ValueKey('travel-place-KR'));
+    await _pumpUntilFound(tester, koreaTile);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(koreaTile, findsOneWidget);
+    await tester.scrollUntilVisible(
+      koreaTile,
+      280,
+      scrollable: find
+          .descendant(
+            of: find.byType(TravelPlaceExplorerSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(koreaTile);
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('travel-map-editor-expanded')),
+    );
+    expect(
+      find.byKey(const ValueKey('travel-map-editor-expanded')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('travel-map-search-launcher')),
+    );
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('travel-place-KR')),
+    );
+    expect(find.byKey(const ValueKey('travel-place-KR')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
   testWidgets('세계 여행 저장 실패는 오류를 알리고 저장 버튼을 다시 활성화한다', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -469,6 +675,16 @@ void main() {
     final button = tester.widget<DearGradientButton>(saveButton);
     expect(button.onPressed, isNotNull);
   });
+}
+
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var i = 0; i < 40 && finder.evaluate().isEmpty; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  expect(finder, findsOneWidget);
 }
 
 class _FakeMapLocationService implements MapLocationService {

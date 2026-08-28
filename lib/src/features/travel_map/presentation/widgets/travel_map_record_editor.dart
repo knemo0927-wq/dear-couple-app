@@ -139,7 +139,9 @@ class TravelMapRecordEditor extends StatelessWidget {
         ? '방문일을 선택해 주세요'
         : '${visitedAt!.year}.${visitedAt!.month.toString().padLeft(2, '0')}.${visitedAt!.day.toString().padLeft(2, '0')}';
     final busy = saving || deleting;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.73;
+    final mediaQuery = MediaQuery.of(context);
+    final maxHeight = mediaQuery.size.height *
+        (mediaQuery.orientation == Orientation.landscape ? 0.44 : 0.73);
 
     return TravelMapSheetFrame(
       child: ConstrainedBox(

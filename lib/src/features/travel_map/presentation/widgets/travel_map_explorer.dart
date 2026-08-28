@@ -72,8 +72,12 @@ class TravelMapSearchLauncher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
+      key: const ValueKey('travel-map-place-list-launcher-semantics'),
+      excludeSemantics: true,
       button: true,
-      label: '여행 장소 검색과 방문 필터 열기',
+      label: '장소 목록 열기',
+      hint: '지도를 조작하지 않고 장소를 검색하거나 방문 상태로 필터링합니다.',
+      onTap: onTap,
       child: Material(
         color: Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(16),
@@ -84,7 +88,7 @@ class TravelMapSearchLauncher extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Container(
-            height: 50,
+            constraints: const BoxConstraints(minHeight: 50),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
@@ -100,7 +104,7 @@ class TravelMapSearchLauncher extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '장소 검색',
+                    '장소 목록 열기',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: DearColors.disabled,
                           fontWeight: FontWeight.w600,
@@ -169,7 +173,95 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
     final recent = showRecent
         ? recentVisitedPlaces(widget.places)
         : const <TravelMapPlaceItem>[];
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.84;
+    final mediaQuery = MediaQuery.of(context);
+    final useExpandedSheet = mediaQuery.orientation == Orientation.landscape ||
+        mediaQuery.textScaler.scale(1) >= 1.5;
+    final maxHeight = mediaQuery.size.height * (useExpandedSheet ? 0.96 : 0.84);
+    final header = <Widget>[
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '여행 장소 찾기',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: DearColors.ink,
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+            ),
+            IconButton(
+              tooltip: '닫기',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: TextField(
+          key: const ValueKey('travel-place-search-field'),
+          controller: _searchController,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: '지역이나 국가를 검색해요',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '검색어 지우기',
+                    onPressed: _searchController.clear,
+                    icon: const Icon(Icons.cancel_rounded),
+                  ),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: DearColors.line),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: DearColors.line),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: TravelPlaceFilter.values.map((filter) {
+            final selected = _filter == filter;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                key: ValueKey('travel-filter-${filter.name}'),
+                label: Text(filter.label),
+                selected: selected,
+                onSelected: (_) => setState(() => _filter = filter),
+                showCheckmark: true,
+                visualDensity: const VisualDensity(vertical: 1),
+              ),
+            );
+          }).toList(growable: false),
+        ),
+      ),
+      const SizedBox(height: 8),
+    ];
+    final resultChildren = <Widget>[
+      if (recent.isNotEmpty) ...[
+        const _SectionLabel(label: '최근 여행'),
+        ...recent.map(_placeTile),
+        const SizedBox(height: 12),
+      ],
+      _SectionLabel(
+        label: showRecent ? '전체 장소' : '검색 결과 ${results.length}개',
+      ),
+      ...results.map(_placeTile),
+    ];
 
     return Container(
       height: maxHeight,
@@ -193,102 +285,49 @@ class _TravelPlaceExplorerSheetState extends State<TravelPlaceExplorerSheet> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '여행 장소 찾기',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: DearColors.ink,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '닫기',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TextField(
-                key: const ValueKey('travel-place-search-field'),
-                controller: _searchController,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: '지역이나 국가를 검색해요',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: '검색어 지우기',
-                          onPressed: _searchController.clear,
-                          icon: const Icon(Icons.cancel_rounded),
+            if (useExpandedSheet)
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    ...header,
+                    if (results.isEmpty)
+                      SizedBox(
+                        height: maxHeight * 0.45,
+                        child: _EmptySearchResult(
+                          onReset: () {
+                            _searchController.clear();
+                            setState(() => _filter = TravelPlaceFilter.all);
+                          },
                         ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: DearColors.line),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: DearColors.line),
-                  ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: resultChildren,
+                        ),
+                      ),
+                  ],
                 ),
+              )
+            else ...[
+              ...header,
+              Expanded(
+                child: results.isEmpty
+                    ? _EmptySearchResult(
+                        onReset: () {
+                          _searchController.clear();
+                          setState(() => _filter = TravelPlaceFilter.all);
+                        },
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                        children: resultChildren,
+                      ),
               ),
-            ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: TravelPlaceFilter.values.map((filter) {
-                  final selected = _filter == filter;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      key: ValueKey('travel-filter-${filter.name}'),
-                      label: Text(filter.label),
-                      selected: selected,
-                      onSelected: (_) => setState(() => _filter = filter),
-                      showCheckmark: true,
-                      visualDensity: const VisualDensity(vertical: 1),
-                    ),
-                  );
-                }).toList(growable: false),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: results.isEmpty
-                  ? _EmptySearchResult(
-                      onReset: () {
-                        _searchController.clear();
-                        setState(() => _filter = TravelPlaceFilter.all);
-                      },
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                      children: [
-                        if (recent.isNotEmpty) ...[
-                          const _SectionLabel(label: '최근 여행'),
-                          ...recent.map(_placeTile),
-                          const SizedBox(height: 12),
-                        ],
-                        _SectionLabel(
-                          label:
-                              showRecent ? '전체 장소' : '검색 결과 ${results.length}개',
-                        ),
-                        ...results.map(_placeTile),
-                      ],
-                    ),
-            ),
+            ],
           ],
         ),
       ),

@@ -684,50 +684,6 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
               ),
             ),
           ),
-          Positioned(
-            left: 20,
-            right: 20,
-            top: 12,
-            child: TravelMapSearchLauncher(
-              onTap: () => _openExplorer(
-                cities: cities,
-                visitsByCityId: visitsByCityId,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 20,
-            top: 76,
-            child: TravelMapProgressCard(
-              visitedCount: visitsByCityId.length,
-              totalCount: cities.length,
-              placeLabel: '대한민국',
-            ),
-          ),
-          if (realtimeError)
-            Positioned(
-              top: 76,
-              right: 20,
-              child: Tooltip(
-                message: '실시간 연결이 끊겼어요. 마지막 기록을 표시하고 있어요.',
-                child: Semantics(
-                  liveRegion: true,
-                  label: '실시간 연결 끊김. 마지막 여행 기록 표시 중',
-                  child: const Material(
-                    color: Colors.white,
-                    shape: CircleBorder(),
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Icon(
-                        Icons.cloud_off_rounded,
-                        color: DearColors.error,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
           if (_editorExpanded)
             Positioned.fill(
               child: GestureDetector(
@@ -738,26 +694,41 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
                 },
               ),
             ),
-          if (!_editorExpanded)
-            Positioned(
-              right: 20,
-              bottom: selectedCity == null ? 128 : 136,
-              child: TravelMapZoomControls(
-                canZoomIn: _currentMapScale < _maxMapScale - 0.01,
-                canZoomOut: _currentMapScale > _minMapScale + 0.01,
-                locating: _locating,
-                onZoomIn: () => _zoomMap(1.12),
-                onZoomOut: () => _zoomMap(0.89),
-                onCurrentLocation: () => _centerOnCurrentLocation(cities),
-                onReset: () => _focusMapOverview(
-                  viewportSize: _mapViewportSize,
-                  contentSize: Size(
-                    _mapViewportSize.width * 1.92,
-                    _mapViewportSize.height * 1.92,
-                  ),
+          Positioned.fill(
+            child: TravelMapAccessibleOverlay(
+              placeListLauncher: TravelMapSearchLauncher(
+                onTap: () => _openExplorer(
+                  cities: cities,
+                  visitsByCityId: visitsByCityId,
                 ),
               ),
+              visitedCount: visitsByCityId.length,
+              totalCount: cities.length,
+              placeLabel: '대한민국',
+              realtimeError: realtimeError,
+              realtimeSemanticLabel: '실시간 연결 끊김. 마지막 여행 기록 표시 중',
+              zoomBottom: selectedCity == null ? 128 : 136,
+              zoomControlsBuilder: _editorExpanded
+                  ? null
+                  : (horizontal) => TravelMapZoomControls(
+                        horizontal: horizontal,
+                        canZoomIn: _currentMapScale < _maxMapScale - 0.01,
+                        canZoomOut: _currentMapScale > _minMapScale + 0.01,
+                        locating: _locating,
+                        onZoomIn: () => _zoomMap(1.12),
+                        onZoomOut: () => _zoomMap(0.89),
+                        onCurrentLocation: () =>
+                            _centerOnCurrentLocation(cities),
+                        onReset: () => _focusMapOverview(
+                          viewportSize: _mapViewportSize,
+                          contentSize: Size(
+                            _mapViewportSize.width * 1.92,
+                            _mapViewportSize.height * 1.92,
+                          ),
+                        ),
+                      ),
             ),
+          ),
           Positioned(
             left: 0,
             right: 0,

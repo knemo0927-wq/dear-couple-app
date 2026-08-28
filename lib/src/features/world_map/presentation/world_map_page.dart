@@ -531,50 +531,6 @@ class _WorldMapPageState extends ConsumerState<WorldMapPage> {
               ),
             ),
           ),
-          Positioned(
-            left: 20,
-            right: 20,
-            top: 12,
-            child: TravelMapSearchLauncher(
-              onTap: () => _openExplorer(
-                countries: countries,
-                visitsByCode: visitsByCode,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 20,
-            top: 76,
-            child: TravelMapProgressCard(
-              visitedCount: visitsByCode.length,
-              totalCount: countries.length,
-              placeLabel: '세계',
-            ),
-          ),
-          if (realtimeError)
-            Positioned(
-              top: 76,
-              right: 20,
-              child: Tooltip(
-                message: '실시간 연결이 끊겼어요. 마지막 기록을 표시하고 있어요.',
-                child: Semantics(
-                  liveRegion: true,
-                  label: '실시간 연결 끊김. 마지막 세계 여행 기록 표시 중',
-                  child: const Material(
-                    color: Colors.white,
-                    shape: CircleBorder(),
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Icon(
-                        Icons.cloud_off_rounded,
-                        color: DearColors.error,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
           if (_editorExpanded)
             Positioned.fill(
               child: GestureDetector(
@@ -585,28 +541,44 @@ class _WorldMapPageState extends ConsumerState<WorldMapPage> {
                 },
               ),
             ),
-          if (!_editorExpanded)
-            Positioned(
-              right: 20,
-              bottom: selectedCountry == null ? 128 : 136,
-              child: TravelMapZoomControls(
-                canZoomIn: _zoom < 3.2,
-                canZoomOut: _zoom > 0.55,
-                locating: _locating,
-                onZoomIn: () => setState(
-                  () => _zoom = (_zoom * 1.2).clamp(0.55, 3.2).toDouble(),
+          Positioned.fill(
+            child: TravelMapAccessibleOverlay(
+              placeListLauncher: TravelMapSearchLauncher(
+                onTap: () => _openExplorer(
+                  countries: countries,
+                  visitsByCode: visitsByCode,
                 ),
-                onZoomOut: () => setState(
-                  () => _zoom = (_zoom / 1.2).clamp(0.55, 3.2).toDouble(),
-                ),
-                onCurrentLocation: _centerOnCurrentLocation,
-                onReset: () => setState(() {
-                  _centerLat = 20;
-                  _centerLng = 127;
-                  _zoom = 1;
-                }),
               ),
+              visitedCount: visitsByCode.length,
+              totalCount: countries.length,
+              placeLabel: '세계',
+              realtimeError: realtimeError,
+              realtimeSemanticLabel: '실시간 연결 끊김. 마지막 세계 여행 기록 표시 중',
+              zoomBottom: selectedCountry == null ? 128 : 136,
+              zoomControlsBuilder: _editorExpanded
+                  ? null
+                  : (horizontal) => TravelMapZoomControls(
+                        horizontal: horizontal,
+                        canZoomIn: _zoom < 3.2,
+                        canZoomOut: _zoom > 0.55,
+                        locating: _locating,
+                        onZoomIn: () => setState(
+                          () =>
+                              _zoom = (_zoom * 1.2).clamp(0.55, 3.2).toDouble(),
+                        ),
+                        onZoomOut: () => setState(
+                          () =>
+                              _zoom = (_zoom / 1.2).clamp(0.55, 3.2).toDouble(),
+                        ),
+                        onCurrentLocation: _centerOnCurrentLocation,
+                        onReset: () => setState(() {
+                          _centerLat = 20;
+                          _centerLng = 127;
+                          _zoom = 1;
+                        }),
+                      ),
             ),
+          ),
           Positioned(
             left: 0,
             right: 0,
