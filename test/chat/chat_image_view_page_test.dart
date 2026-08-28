@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_image_actions.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_image_view_page.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +13,8 @@ Widget imageApp({
   required ChatSaveImage save,
   required ChatShareImage share,
   double textScale = 1,
+  List<String>? imageUrls,
+  int initialIndex = 0,
 }) {
   return ProviderScope(
     overrides: [
@@ -21,9 +25,11 @@ Widget imageApp({
     child: MaterialApp(
       home: MediaQuery(
         data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-        child: const ChatImageViewPage(
+        child: ChatImageViewPage(
           imageUrl: 'https://example.invalid/photo.png',
           heroTag: 'photo',
+          imageUrls: imageUrls,
+          initialIndex: initialIndex,
         ),
       ),
     ),
@@ -91,6 +97,177 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-image-save')));
     await tester.pumpAndSettle();
     expect(find.textContaining('기기 설정에서 권한을 허용'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(DearInlineError),
+        matching: find.text('다시 시도'),
+      ),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('저장 중에도 사진을 유지하고 저장·공유 버튼을 함께 잠근다', (tester) async {
+    final fetchCompleter = Completer<Uint8List>();
+    await tester.pumpWidget(
+      imageApp(
+        fetch: (_) => fetchCompleter.future,
+        save: ({required bytes, required name}) async =>
+            ChatImageSaveResult.saved,
+        share: ({
+          required bytes,
+          required filename,
+          required mimeType,
+          sharePositionOrigin,
+        }) async {},
+      ),
+    );
+    final semantics = tester.ensureSemantics();
+
+    await tester.tap(find.byKey(const Key('chat-image-save')));
+    await tester.pump();
+
+    expect(find.byType(PageView), findsOneWidget);
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const Key('chat-image-save')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const Key('chat-image-share')))
+          .onPressed,
+      isNull,
+    );
+    expect(find.bySemanticsLabel('1번째 사진 저장 중'), findsOneWidget);
+
+    fetchCompleter.complete(Uint8List.fromList([1, 2, 3]));
+    await tester.pumpAndSettle();
+    semantics.dispose();
+  });
+
+  testWidgets('저장 실패 재시도는 내려받은 바이트를 재사용한다', (tester) async {
+    var fetchCount = 0;
+    var saveCount = 0;
+    await tester.pumpWidget(
+      imageApp(
+        fetch: (_) async {
+          fetchCount++;
+          return Uint8List.fromList([7, 8, 9]);
+        },
+        save: ({required bytes, required name}) async {
+          saveCount++;
+          if (saveCount == 1) throw Exception('temporary save failure');
+          return ChatImageSaveResult.saved;
+        },
+        share: ({
+          required bytes,
+          required filename,
+          required mimeType,
+          sharePositionOrigin,
+        }) async {},
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-image-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('사진을 저장하지 못했어요.'), findsOneWidget);
+    expect(find.byType(PageView), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(DearInlineError),
+        matching: find.text('다시 시도'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(saveCount, 2);
+    expect(fetchCount, 1);
+    expect(find.text('사진을 저장하지 못했어요.'), findsNothing);
+  });
+
+  testWidgets('저장 중 페이지를 넘겨도 시작한 사진의 번호와 바이트를 사용한다', (tester) async {
+    final firstFetch = Completer<Uint8List>();
+    Uint8List? savedBytes;
+    String? savedName;
+    await tester.pumpWidget(
+      imageApp(
+        imageUrls: const [
+          'https://example.invalid/first.png',
+          'https://example.invalid/second.png',
+        ],
+        fetch: (url) {
+          if (url.endsWith('first.png')) return firstFetch.future;
+          return Future.value(Uint8List.fromList([2]));
+        },
+        save: ({required bytes, required name}) async {
+          savedBytes = bytes;
+          savedName = name;
+          return ChatImageSaveResult.saved;
+        },
+        share: ({
+          required bytes,
+          required filename,
+          required mimeType,
+          sharePositionOrigin,
+        }) async {},
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-image-save')));
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('이미지 보기 2 / 2'), findsOneWidget);
+
+    firstFetch.complete(Uint8List.fromList([1]));
+    await tester.pumpAndSettle();
+
+    expect(savedBytes, Uint8List.fromList([1]));
+    expect(savedName, endsWith('_1'));
+  });
+
+  testWidgets('이미지 로딩 실패는 44pt 재시도와 live 안내를 제공한다', (tester) async {
+    await tester.pumpWidget(
+      imageApp(
+        fetch: (_) async => Uint8List.fromList([1]),
+        save: ({required bytes, required name}) async =>
+            ChatImageSaveResult.saved,
+        share: ({
+          required bytes,
+          required filename,
+          required mimeType,
+          sharePositionOrigin,
+        }) async {},
+      ),
+    );
+    final semantics = tester.ensureSemantics();
+    await tester.pumpAndSettle();
+
+    final retry = find.byKey(const ValueKey<String>('chat-image-retry-0'));
+    expect(retry, findsOneWidget);
+    expect(tester.getSize(retry).width, greaterThanOrEqualTo(44));
+    expect(tester.getSize(retry).height, greaterThanOrEqualTo(44));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.liveRegion == true &&
+            (widget.properties.label ?? '').contains('이미지를 불러오지 못했어요'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('chat-image-view-0-1')),
+      findsOneWidget,
+    );
+    semantics.dispose();
   });
 }
