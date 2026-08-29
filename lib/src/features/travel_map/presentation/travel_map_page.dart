@@ -433,6 +433,12 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
         caption: memo.isEmpty ? null : memo,
       );
       if (!mounted) return;
+      ref.invalidate(
+        travelCityPhotosProvider((
+          coupleId: coupleId,
+          cityId: city.id,
+        )),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${city.name} 여행 사진을 추가했어요.')),
       );
@@ -615,16 +621,19 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
       _initializeRouteSelection(selectedCity, visitsByCityId);
     }
 
-    final selectedPhotosAsync = selectedCity == null
+    final selectedPhotosProvider = selectedCity == null
         ? null
-        : ref.watch(
-            travelCityPhotosProvider((
-              coupleId: coupleId,
-              cityId: selectedCity.id,
-            )),
-          );
+        : travelCityPhotosProvider((
+            coupleId: coupleId,
+            cityId: selectedCity.id,
+          ));
+    final selectedPhotosAsync = selectedPhotosProvider == null
+        ? null
+        : ref.watch(selectedPhotosProvider);
     final selectedPhotos =
         selectedPhotosAsync?.valueOrNull ?? const <TravelCityPhoto>[];
+    final unavailablePhotoCount =
+        selectedPhotos.where((photo) => photo.signedUrl == null).length;
     var selectedColor = ref.watch(selectedTravelPaletteColorProvider);
     final existingColor =
         selectedCity == null ? null : visitsByCityId[selectedCity.id]?.colorHex;
@@ -774,14 +783,21 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
                             (photo) => TravelMapPhotoItem(
                               id: photo.id,
                               url: photo.signedUrl,
-                              semanticLabel: '${selectedCity!.name} 여행 사진',
+                              semanticLabel: photo.signedUrl == null
+                                  ? '${selectedCity!.name} 여행 사진, 미리보기를 불러오지 못함'
+                                  : '${selectedCity!.name} 여행 사진',
                             ),
                           )
                           .toList(growable: false),
                       photosLoading: selectedPhotosAsync?.isLoading ?? false,
                       photosError: selectedPhotosAsync?.hasError ?? false
-                          ? '사진을 불러오지 못했어요. 실시간 연결을 확인해 주세요.'
-                          : null,
+                          ? '사진 목록을 불러오지 못했어요.'
+                          : unavailablePhotoCount > 0
+                              ? '$unavailablePhotoCount장의 사진 미리보기를 불러오지 못했어요.'
+                              : null,
+                      onRetryPhotos: selectedPhotosProvider == null
+                          ? null
+                          : () => ref.invalidate(selectedPhotosProvider),
                       saving: _saving,
                       deleting: _deleting,
                       uploadingPhoto: _uploadingPhoto,

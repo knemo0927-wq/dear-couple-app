@@ -569,6 +569,7 @@ class DearInlineError extends StatelessWidget {
   const DearInlineError({
     required this.message,
     this.onRetry,
+    this.retryButtonKey,
     this.retrying = false,
     this.retryLabel = '다시 시도',
     this.retryingLabel = '다시 불러오는 중',
@@ -577,6 +578,7 @@ class DearInlineError extends StatelessWidget {
 
   final String message;
   final VoidCallback? onRetry;
+  final Key? retryButtonKey;
   final bool retrying;
   final String retryLabel;
   final String retryingLabel;
@@ -626,6 +628,7 @@ class DearInlineError extends StatelessWidget {
                     if (onRetry != null || retrying) ...[
                       const SizedBox(height: DearSpacing.space4),
                       TextButton.icon(
+                        key: retryButtonKey,
                         onPressed: retrying ? null : onRetry,
                         style: TextButton.styleFrom(
                           foregroundColor: scheme.onErrorContainer,

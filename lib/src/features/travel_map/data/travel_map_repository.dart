@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -99,9 +100,12 @@ class TravelCityPhoto {
   final String? caption;
   final String uploadedBy;
   final DateTime createdAt;
-  final String signedUrl;
+  final String? signedUrl;
 
-  factory TravelCityPhoto.fromMap(Map<String, dynamic> map, String signedUrl) {
+  factory TravelCityPhoto.fromMap(
+    Map<String, dynamic> map,
+    String? signedUrl,
+  ) {
     return TravelCityPhoto(
       id: map['id'] as String,
       coupleId: map['couple_id'] as String,
@@ -113,6 +117,30 @@ class TravelCityPhoto {
       signedUrl: signedUrl,
     );
   }
+}
+
+typedef TravelCityPhotoSignFailureHandler = void Function(
+  Object error,
+  StackTrace stackTrace,
+);
+
+Future<List<TravelCityPhoto>> resolveTravelCityPhotoRows(
+  Iterable<Map<String, dynamic>> rows, {
+  required MapPhotoUrlSigner signer,
+  TravelCityPhotoSignFailureHandler? onSignFailure,
+}) async {
+  final result = <TravelCityPhoto>[];
+  for (final map in rows) {
+    final path = map['storage_path'] as String;
+    String? signedUrl;
+    try {
+      signedUrl = await signer(path);
+    } on Exception catch (error, stackTrace) {
+      onSignFailure?.call(error, stackTrace);
+    }
+    result.add(TravelCityPhoto.fromMap(map, signedUrl));
+  }
+  return result;
 }
 
 class TravelMapRepository {
@@ -196,27 +224,42 @@ class TravelMapRepository {
   Stream<List<TravelCityPhoto>> watchCityPhotos({
     required String coupleId,
     required String cityId,
-  }) {
+  }) async* {
     final scope = mapPhotoQueryScope(
       coupleId: coupleId,
       placeId: cityId,
     );
-    return _client
+    final source = _client
         .from('travel_city_photos')
         .stream(primaryKey: ['id'])
         .eq(MapPhotoQueryScope.column, scope.value)
         .order('created_at', ascending: false)
-        .limit(scope.limit)
-        .asyncMap((rows) async {
-          final result = <TravelCityPhoto>[];
-          for (final row in rows) {
-            final map = Map<String, dynamic>.from(row);
-            final path = map['storage_path'] as String;
-            final signed = await _photoUrlCache.resolve(path);
-            result.add(TravelCityPhoto.fromMap(map, signed));
-          }
-          return result;
-        });
+        .limit(scope.limit);
+
+    try {
+      await for (final rows in source) {
+        yield await resolveTravelCityPhotoRows(
+          rows.map(Map<String, dynamic>.from),
+          signer: _photoUrlCache.resolve,
+          onSignFailure: (error, stackTrace) {
+            developer.log(
+              'Failed to create a travel photo signed URL.',
+              name: 'dear.travel_map.photos',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          },
+        );
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to load the travel city photo stream.',
+        name: 'dear.travel_map.photos',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   Future<void> uploadCityPhoto({

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:couple_chat_app/src/features/travel_map/data/map_photo_query.dart';
+import 'package:couple_chat_app/src/features/travel_map/data/travel_map_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -45,6 +46,26 @@ void main() {
     expect(signCalls, 2);
   });
 
+  test('한 사진의 signed URL 실패가 정상 사진을 숨기지 않는다', () async {
+    var failures = 0;
+    final photos = await resolveTravelCityPhotoRows(
+      [
+        _photoRow(id: 'photo-1', storagePath: 'ok.jpg'),
+        _photoRow(id: 'photo-2', storagePath: 'broken.jpg'),
+      ],
+      signer: (path) async {
+        if (path == 'broken.jpg') throw Exception('sign failed');
+        return 'signed-$path';
+      },
+      onSignFailure: (_, __) => failures++,
+    );
+
+    expect(photos, hasLength(2));
+    expect(photos.first.signedUrl, 'signed-ok.jpg');
+    expect(photos.last.signedUrl, isNull);
+    expect(failures, 1);
+  });
+
   test('migration은 장소별 scope, bounded index, 공동 삭제 정책을 고정한다', () async {
     final sql = await File(
       'supabase/migrations/202607120010_map_photo_scope_and_shared_delete.sql',
@@ -58,4 +79,19 @@ void main() {
     expect(sql, contains('travel_city_photo_objects_delete_couple'));
     expect(sql, isNot(contains('owner_id = auth.uid()')));
   });
+}
+
+Map<String, dynamic> _photoRow({
+  required String id,
+  required String storagePath,
+}) {
+  return {
+    'id': id,
+    'couple_id': 'couple-1',
+    'city_id': 'city-1',
+    'storage_path': storagePath,
+    'caption': null,
+    'uploaded_by': 'user-1',
+    'created_at': '2026-08-30T00:00:00Z',
+  };
 }

@@ -30,7 +30,7 @@ class TravelMapPhotoItem {
   });
 
   final String id;
-  final String url;
+  final String? url;
   final String semanticLabel;
 }
 
@@ -111,6 +111,7 @@ class TravelMapRecordEditor extends StatelessWidget {
     required this.onAddPhoto,
     required this.onDeletePhoto,
     this.photosError,
+    this.onRetryPhotos,
     super.key,
   });
 
@@ -135,6 +136,7 @@ class TravelMapRecordEditor extends StatelessWidget {
   final VoidCallback? onAddPhoto;
   final ValueChanged<String> onDeletePhoto;
   final String? photosError;
+  final VoidCallback? onRetryPhotos;
 
   @override
   Widget build(BuildContext context) {
@@ -334,11 +336,12 @@ class TravelMapRecordEditor extends StatelessWidget {
               ),
               if (photosError != null) ...[
                 const SizedBox(height: 8),
-                Text(
-                  photosError!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.error,
-                      ),
+                DearInlineError(
+                  message: photosError!,
+                  onRetry: onRetryPhotos,
+                  retrying: photosLoading,
+                  retryButtonKey:
+                      const ValueKey('travel-map-photo-retry-button'),
                 ),
               ],
               const SizedBox(height: 18),
@@ -595,23 +598,16 @@ class _PhotoStrip extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: Image.network(
-                    photo.url,
-                    width: 88,
-                    height: 88,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => SizedBox(
-                      width: 88,
-                      height: 88,
-                      child: ColoredBox(
-                        color: scheme.surfaceContainerHigh,
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: scheme.onSurfaceVariant,
+                  child: photo.url == null
+                      ? _UnavailablePhotoPreview(scheme: scheme)
+                      : Image.network(
+                          photo.url!,
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              _UnavailablePhotoPreview(scheme: scheme),
                         ),
-                      ),
-                    ),
-                  ),
                 ),
                 Positioned(
                   top: -8,
@@ -633,6 +629,27 @@ class _PhotoStrip extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _UnavailablePhotoPreview extends StatelessWidget {
+  const _UnavailablePhotoPreview({required this.scheme});
+
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 88,
+      height: 88,
+      child: ColoredBox(
+        color: scheme.surfaceContainerHigh,
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: scheme.onSurfaceVariant,
+        ),
       ),
     );
   }
