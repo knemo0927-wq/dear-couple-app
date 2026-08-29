@@ -209,6 +209,121 @@ $$;
 
 lock table public.travel_cities in share row exclusive mode;
 
+-- Some deployed projects predate the stable METRO_/SIG_ catalog and still
+-- use CITY_* codes or an older SGIS code revision. Re-key those rows in place
+-- so their UUIDs (and therefore visit/photo foreign keys) remain unchanged.
+create temporary table legacy_travel_city_mapping (
+  source_city_id uuid primary key,
+  source_code text not null unique,
+  target_code text not null unique,
+  mapping_distance double precision not null
+) on commit drop;
+
+insert into legacy_travel_city_mapping (
+  source_city_id, source_code, target_code, mapping_distance
+)
+select
+  actual.id,
+  actual.code,
+  target.code,
+  target.mapping_distance
+from public.travel_cities as actual
+join lateral (
+  select
+    canonical.code,
+    sqrt(
+      power(actual.center_lat - canonical.center_lat, 2) +
+      power(actual.center_lng - canonical.center_lng, 2)
+    ) as mapping_distance
+  from canonical_travel_cities as canonical
+  where actual.name = canonical.name
+     or regexp_replace(actual.name, '(시|군|구)$', '') = canonical.name
+  order by
+    (actual.name = canonical.name) desc,
+    power(actual.center_lat - canonical.center_lat, 2) +
+      power(actual.center_lng - canonical.center_lng, 2),
+    canonical.sort_order
+  limit 1
+) as target on true
+where not exists (
+  select 1
+  from canonical_travel_cities as canonical
+  where canonical.code = actual.code
+);
+
+do $$
+declare
+  unexpected_source_count integer;
+  mapped_source_count integer;
+  mapped_target_count integer;
+  duplicate_target_count integer;
+  existing_target_count integer;
+  max_mapping_distance double precision;
+begin
+  select count(*)
+  into unexpected_source_count
+  from public.travel_cities as actual
+  where not exists (
+    select 1
+    from canonical_travel_cities as canonical
+    where canonical.code = actual.code
+  );
+
+  select count(*), count(distinct target_code)
+  into mapped_source_count, mapped_target_count
+  from legacy_travel_city_mapping;
+
+  select count(*)
+  into duplicate_target_count
+  from (
+    select target_code
+    from legacy_travel_city_mapping
+    group by target_code
+    having count(*) > 1
+  ) as duplicate_targets;
+
+  select count(*)
+  into existing_target_count
+  from legacy_travel_city_mapping as mapping
+  join public.travel_cities as existing
+    on existing.code = mapping.target_code;
+
+  select max(mapping_distance)
+  into max_mapping_distance
+  from legacy_travel_city_mapping;
+
+  if unexpected_source_count <> mapped_source_count
+     or mapped_target_count <> mapped_source_count
+     or duplicate_target_count <> 0
+     or existing_target_count <> 0
+     or max_mapping_distance > 0.15 then
+    raise exception using
+      errcode = '23514',
+      message = format(
+        'Domestic travel legacy mapping is unsafe: unexpected=%s mapped=%s distinct_targets=%s duplicate_targets=%s existing_targets=%s max_distance=%s',
+        unexpected_source_count,
+        mapped_source_count,
+        mapped_target_count,
+        duplicate_target_count,
+        existing_target_count,
+        max_mapping_distance
+      );
+  end if;
+end;
+$$;
+
+update public.travel_cities as actual
+set code = mapping.target_code,
+    name = canonical.name,
+    region_group = canonical.region_group,
+    center_lat = canonical.center_lat,
+    center_lng = canonical.center_lng,
+    sort_order = canonical.sort_order
+from legacy_travel_city_mapping as mapping
+join canonical_travel_cities as canonical
+  on canonical.code = mapping.target_code
+where actual.id = mapping.source_city_id;
+
 insert into public.travel_cities (
   code, name, region_group, center_lat, center_lng, sort_order
 )
@@ -231,6 +346,7 @@ declare
   missing_code_count integer;
   unexpected_code_count integer;
   mismatched_value_count integer;
+  remapped_identity_mismatch_count integer;
 begin
   select count(*), count(distinct sort_order), min(sort_order), max(sort_order)
   into actual_count, actual_sort_count, actual_min_sort, actual_max_sort
@@ -264,24 +380,33 @@ begin
      or actual.center_lng is distinct from canonical.center_lng
      or actual.sort_order is distinct from canonical.sort_order;
 
+  select count(*)
+  into remapped_identity_mismatch_count
+  from legacy_travel_city_mapping as mapping
+  left join public.travel_cities as actual
+    on actual.code = mapping.target_code
+  where actual.id is distinct from mapping.source_city_id;
+
   if actual_count <> 161
      or actual_sort_count <> 161
      or actual_min_sort <> 1
      or actual_max_sort <> 161
      or missing_code_count <> 0
      or unexpected_code_count <> 0
-     or mismatched_value_count <> 0 then
+     or mismatched_value_count <> 0
+     or remapped_identity_mismatch_count <> 0 then
     raise exception using
       errcode = '23514',
       message = format(
-        'Domestic travel catalog reconciliation failed: rows=%s distinct_sort=%s range=%s..%s missing=%s unexpected=%s mismatched=%s',
+        'Domestic travel catalog reconciliation failed: rows=%s distinct_sort=%s range=%s..%s missing=%s unexpected=%s mismatched=%s remapped_identity_mismatches=%s',
         actual_count,
         actual_sort_count,
         actual_min_sort,
         actual_max_sort,
         missing_code_count,
         unexpected_code_count,
-        mismatched_value_count
+        mismatched_value_count,
+        remapped_identity_mismatch_count
       );
   end if;
 end;

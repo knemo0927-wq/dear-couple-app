@@ -58,7 +58,7 @@ void main() {
     );
   });
 
-  test('code upsert는 기존 id와 참조 테이블을 변경하지 않는다', () {
+  test('기존 행의 code만 제자리에서 복구하여 id와 참조 행을 보존한다', () {
     final insertMatch = RegExp(
       r'insert into public\.travel_cities\s*\(([\s\S]*?)\)\s*select',
     ).firstMatch(migration);
@@ -71,26 +71,103 @@ void main() {
     expect(updateMatch, isNotNull);
     final updateClause = updateMatch!.group(1)!;
 
+    final inPlaceCodeUpdate = RegExp(
+      r'update\s+public\.travel_cities\s+as\s+actual\s+'
+      r'set\s+code\s*=\s*mapping\.target_code[\s\S]*?'
+      r'from\s+legacy_travel_city_mapping\s+as\s+mapping[\s\S]*?'
+      r'where\s+actual\.id\s*=\s*mapping\.source_city_id\s*;',
+      caseSensitive: false,
+    ).firstMatch(migration);
+    expect(inPlaceCodeUpdate, isNotNull);
+
+    final codeUpdateIndex = migration.indexOf(inPlaceCodeUpdate!.group(0)!);
+    final canonicalUpsertIndex = migration.indexOf(
+      'insert into public.travel_cities',
+    );
+    expect(codeUpdateIndex, greaterThanOrEqualTo(0));
+    expect(canonicalUpsertIndex, greaterThan(codeUpdateIndex));
+
     expect(insertColumns, isNot(matches(RegExp(r'\bid\b'))));
     expect(updateClause, isNot(matches(RegExp(r'\bid\s*='))));
     expect(migration, contains('on conflict (code) do update'));
     expect(migration, contains('lock table public.travel_cities'));
+    final executableSql = _withoutSqlComments(migration);
     expect(
-      migration,
-      isNot(matches(RegExp(r'\b(delete|truncate)\b', caseSensitive: false))),
-    );
-    expect(
-      migration,
+      executableSql,
       isNot(
         matches(
           RegExp(
-            r'\b(alter|insert into|update)\s+'
+            r'\b(delete\s+from|truncate(?:\s+table)?)\b',
+            caseSensitive: false,
+          ),
+        ),
+      ),
+    );
+    expect(
+      executableSql,
+      isNot(
+        matches(
+          RegExp(
+            r'\b(alter\s+table|insert\s+into|update)\s+'
             r'public\.travel_city_(visits|photos)\b',
             caseSensitive: false,
           ),
         ),
       ),
     );
+  });
+
+  test('legacy 코드는 이름·좌표로 1:1 매핑되지 않으면 fail-closed한다', () {
+    final mappingTable = RegExp(
+      r'create\s+temporary\s+table\s+legacy_travel_city_mapping\s*'
+      r'\(([\s\S]*?)\)\s*on\s+commit\s+drop\s*;',
+      caseSensitive: false,
+    ).firstMatch(migration);
+    expect(mappingTable, isNotNull);
+
+    final mappingColumns = mappingTable!.group(1)!;
+    for (final contract in [
+      'source_city_id uuid primary key',
+      'source_code text not null unique',
+      'target_code text not null unique',
+      'mapping_distance double precision not null',
+    ]) {
+      expect(
+        _normalizedSql(mappingColumns),
+        contains(contract),
+        reason: contract,
+      );
+    }
+
+    expect(
+      migration,
+      matches(
+        RegExp(
+          r'regexp_replace\s*\([\s\S]*?\((?:\?:)?\uc2dc\|\uad70\|\uad6c\)\$',
+          caseSensitive: false,
+        ),
+      ),
+      reason: '정확한 이름 또는 마지막 시/군/구만 제거한 이름으로 비교해야 함',
+    );
+    expect(migration, contains('actual.center_lat'));
+    expect(migration, contains('actual.center_lng'));
+    expect(migration, contains('canonical.center_lat'));
+    expect(migration, contains('canonical.center_lng'));
+
+    for (final contract in [
+      'unexpected_source_count',
+      'mapped_source_count',
+      'duplicate_target_count',
+      'existing_target_count',
+      'max_mapping_distance',
+      'unexpected_source_count <> mapped_source_count',
+      'duplicate_target_count <> 0',
+      'existing_target_count <> 0',
+      'max_mapping_distance > 0.15',
+      "errcode = '23514'",
+    ]) {
+      expect(migration, contains(contract), reason: contract);
+    }
   });
 
   test('트랜잭션 안에서 exact code·count·sort·value postcondition을 검증한다', () {
@@ -106,11 +183,13 @@ void main() {
       'missing_code_count <> 0',
       'unexpected_code_count <> 0',
       'mismatched_value_count <> 0',
+      'remapped_identity_mismatch_count <> 0',
       'actual.name is distinct from canonical.name',
       'actual.region_group is distinct from canonical.region_group',
       'actual.center_lat is distinct from canonical.center_lat',
       'actual.center_lng is distinct from canonical.center_lng',
       'actual.sort_order is distinct from canonical.sort_order',
+      'actual.id is distinct from mapping.source_city_id',
       "errcode = '23514'",
     ]) {
       expect(migration, contains(contract), reason: contract);
@@ -162,6 +241,12 @@ List<_CatalogRow> _parseRows(String section) {
 
 int _compareRows(_CatalogRow left, _CatalogRow right) =>
     left.sortOrder.compareTo(right.sortOrder);
+
+String _withoutSqlComments(String sql) =>
+    sql.replaceAll(RegExp(r'--[^\n]*(?:\n|$)'), '\n');
+
+String _normalizedSql(String sql) =>
+    sql.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
 
 class _CatalogRow {
   const _CatalogRow({
