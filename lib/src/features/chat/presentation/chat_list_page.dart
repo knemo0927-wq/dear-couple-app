@@ -685,6 +685,7 @@ class _PrimaryChatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    final stackedMeta = largeText || MediaQuery.sizeOf(context).width < 360;
     final scheme = Theme.of(context).colorScheme;
     return DearCard(
       key: const ValueKey('primary-chat-card'),
@@ -728,7 +729,7 @@ class _PrimaryChatCard extends StatelessWidget {
                                   ),
                             ),
                           ),
-                          if (unreadCount > 0 && !largeText) ...[
+                          if (unreadCount > 0 && !stackedMeta) ...[
                             const SizedBox(width: 8),
                             Container(
                               constraints: const BoxConstraints(minWidth: 20),
@@ -772,7 +773,7 @@ class _PrimaryChatCard extends StatelessWidget {
                               fontWeight: FontWeight.w400,
                             ),
                       ),
-                      if (largeText &&
+                      if (stackedMeta &&
                           (latestTimeLabel != null || unreadCount > 0)) ...[
                         const SizedBox(height: 6),
                         Wrap(
@@ -809,7 +810,7 @@ class _PrimaryChatCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (!largeText) ...[
+                if (!stackedMeta) ...[
                   const SizedBox(width: 10),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -869,12 +870,10 @@ class _PartnerAvatar extends StatelessWidget {
     final imageUrl = this.imageUrl?.trim();
     final scheme = Theme.of(context).colorScheme;
     return Container(
+      key: const ValueKey('primary-chat-avatar'),
       width: 56,
       height: 56,
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        // This is an intentional photo-frame ring, not a page surface.
-        color: Colors.white,
+      foregroundDecoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: scheme.outlineVariant),
       ),
@@ -889,6 +888,7 @@ class _PartnerAvatar extends StatelessWidget {
               )
             : Image.network(
                 imageUrl,
+                key: const ValueKey('primary-chat-avatar-image'),
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => ColoredBox(
                   color: scheme.primaryContainer,
@@ -1038,6 +1038,7 @@ class _HomeFeatureIcon extends StatelessWidget {
   const _HomeFeatureIcon({
     required this.glyph,
     this.size = 52,
+    super.key,
   });
 
   final _FeatureGlyph glyph;
@@ -1464,29 +1465,43 @@ class _FeatureGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
-    if (largeText) {
-      return Column(
-        children: [
-          for (var index = 0; index < items.length; index++) ...[
-            if (index > 0) const SizedBox(height: 8),
-            _FeatureTile(item: items[index]),
-          ],
-        ],
-      );
-    }
+    final scaledTitleSize = MediaQuery.textScalerOf(context).scale(14);
+    final effectiveTextScale = scaledTitleSize / 14;
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        mainAxisExtent: 122,
-      ),
-      itemBuilder: (context, index) => _FeatureTile(item: items[index]),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const columnCount = 3;
+        const gap = DearSpacing.space8;
+        final tileWidth =
+            (constraints.maxWidth - (columnCount - 1) * gap) / columnCount;
+        final useSingleColumn = effectiveTextScale >= 1.6 || tileWidth < 104;
+
+        if (useSingleColumn) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < items.length; index++) ...[
+                if (index > 0) const SizedBox(height: gap),
+                _FeatureTile(item: items[index], singleColumn: true),
+              ],
+            ],
+          );
+        }
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columnCount,
+            mainAxisSpacing: gap,
+            crossAxisSpacing: gap,
+            mainAxisExtent: 122,
+          ),
+          itemBuilder: (context, index) =>
+              _FeatureTile(item: items[index], singleColumn: false),
+        );
+      },
     );
   }
 }
@@ -1521,13 +1536,13 @@ class _FeatureItem {
 }
 
 class _FeatureTile extends StatelessWidget {
-  const _FeatureTile({required this.item});
+  const _FeatureTile({required this.item, required this.singleColumn});
 
   final _FeatureItem item;
+  final bool singleColumn;
 
   @override
   Widget build(BuildContext context) {
-    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
     final scheme = Theme.of(context).colorScheme;
     final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
           color: scheme.onSurface,
@@ -1557,76 +1572,69 @@ class _FeatureTile extends StatelessWidget {
           )
         : null;
 
-    final content = largeText
-        ? Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                ExcludeSemantics(
-                  child: _HomeFeatureIcon(glyph: item.glyph, size: 44),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.title, style: titleStyle),
-                      const SizedBox(height: 4),
-                      Text(item.subtitle, style: subtitleStyle),
-                    ],
-                  ),
-                ),
-                if (badge != null) ...[
-                  const SizedBox(width: 12),
-                  badge,
-                ],
-              ],
+    final centeredContent = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: singleColumn ? DearSpacing.space16 : 6,
+        vertical: singleColumn ? 14 : 10,
+      ),
+      child: Column(
+        mainAxisSize: singleColumn ? MainAxisSize.min : MainAxisSize.max,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ExcludeSemantics(
+            child: _HomeFeatureIcon(
+              key: ValueKey('quick-action-${item.glyph.name}-icon'),
+              glyph: item.glyph,
+              size: DearIconSizes.feature,
             ),
-          )
-        : Stack(
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ExcludeSemantics(
-                      child: _HomeFeatureIcon(glyph: item.glyph, size: 44),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: titleStyle,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: subtitleStyle,
-                    ),
-                  ],
-                ),
-              ),
-              if (badge != null)
-                Positioned(
-                  right: 7,
-                  top: 7,
-                  child: badge,
-                ),
-            ],
-          );
+          ),
+          const SizedBox(height: 7),
+          Text(
+            item.title,
+            key: ValueKey('quick-action-${item.glyph.name}-title'),
+            maxLines: singleColumn ? null : 1,
+            overflow:
+                singleColumn ? TextOverflow.visible : TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: titleStyle,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            item.subtitle,
+            key: ValueKey('quick-action-${item.glyph.name}-subtitle'),
+            maxLines: singleColumn ? null : 1,
+            overflow:
+                singleColumn ? TextOverflow.visible : TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: subtitleStyle,
+          ),
+        ],
+      ),
+    );
+    final content = Stack(
+      fit: singleColumn ? StackFit.loose : StackFit.expand,
+      alignment: Alignment.center,
+      children: [
+        if (singleColumn)
+          SizedBox(width: double.infinity, child: centeredContent)
+        else
+          centeredContent,
+        if (badge != null)
+          Positioned(
+            right: 7,
+            top: 7,
+            child: badge,
+          ),
+      ],
+    );
 
     final semanticLabel = item.badgeCount > 0
         ? '${item.title}, ${item.subtitle}, 새 항목 ${item.badgeCount}개'
         : '${item.title}, ${item.subtitle}';
 
     return Semantics(
+      key: ValueKey('quick-action-${item.glyph.name}'),
       button: true,
       label: semanticLabel,
       onTap: item.onTap,

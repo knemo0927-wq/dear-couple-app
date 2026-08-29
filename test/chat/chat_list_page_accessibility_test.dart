@@ -60,7 +60,79 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('홈 채팅 아바타는 내부 여백 없이 원형 프레임을 사진으로 채운다', (tester) async {
+    await _pumpAccessibleHome(
+      tester,
+      size: const Size(375, 812),
+      textScale: 1,
+      avatarUrls: const <String, String>{
+        'user-2': 'https://example.invalid/partner-avatar.jpg',
+      },
+    );
+
+    final avatarFinder = find.byKey(const ValueKey('primary-chat-avatar'));
+    final avatar = tester.widget<Container>(avatarFinder);
+    final foreground = avatar.foregroundDecoration! as BoxDecoration;
+    final image = tester.widget<Image>(
+      find.byKey(const ValueKey('primary-chat-avatar-image')),
+    );
+
+    expect(avatar.padding, isNull);
+    expect(avatar.decoration, isNull);
+    expect(foreground.color, isNull);
+    expect(foreground.shape, BoxShape.circle);
+    expect(foreground.border, isNotNull);
+    expect(
+      find.descendant(of: avatarFinder, matching: find.byType(ClipOval)),
+      findsOneWidget,
+    );
+    expect(tester.getSize(avatarFinder), const Size.square(56));
+    expect(image.fit, BoxFit.cover);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final size in <Size>[const Size(430, 932), const Size(375, 812)]) {
+    testWidgets('홈 ${size.width.toInt()}pt 기본 글자에서 빠른 실행 3카드가 중앙 정렬된다',
+        (tester) async {
+      await _pumpAccessibleHome(tester, size: size, textScale: 1);
+      await _revealQuickActions(tester);
+
+      expect(find.byType(GridView), findsOneWidget);
+      _expectQuickActionCenters(tester);
+      _expectCompactQuickActionRowsAligned(tester);
+      for (final glyph in _quickActionGlyphs) {
+        expect(
+          tester.getSize(find.byKey(ValueKey('quick-action-$glyph'))).height,
+          122,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('홈은 320pt 기본 글자에서도 좁은 카드를 만들지 않고 1열로 전환한다', (tester) async {
+    await _pumpAccessibleHome(
+      tester,
+      size: const Size(320, 568),
+      textScale: 1,
+    );
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: '320pt 홈의 최초 레이아웃부터 overflow가 없어야 합니다.',
+    );
+    await _revealQuickActions(tester);
+
+    expect(find.byType(GridView), findsNothing);
+    _expectSingleColumnQuickActions(tester);
+    _expectQuickActionCenters(tester);
+    expect(find.text('함께한 장소 보기'), findsOneWidget);
+    expect(find.text('한 판 하러 가기'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('홈은 320pt·200% 글자에서 빠른 실행을 1열로 재배치한다', (tester) async {
+    final semantics = tester.ensureSemantics();
     await _pumpAccessibleHome(
       tester,
       size: const Size(320, 568),
@@ -106,7 +178,11 @@ void main() {
     }
     expect(find.text('함께한 장소 보기'), findsOneWidget);
     expect(find.text('한 판 하러 가기'), findsOneWidget);
+    _expectSingleColumnQuickActions(tester);
+    _expectQuickActionCenters(tester);
+    _expectQuickActionSemanticsInReadingOrder(tester);
     expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 
   testWidgets('다크 홈은 카드·텍스트·알림 제어에 dark color scheme을 사용한다', (tester) async {
@@ -204,12 +280,128 @@ void main() {
 
 const _homeCoupleId = '11111111-1111-4111-8111-111111111111';
 const _longChatPreview = '오늘 저녁에 같이 산책하고 돌아오는 길에 오래 이야기하고 싶어';
+const _quickActionGlyphs = <String>['anniversary', 'koreaMap', 'omok'];
+
+Future<void> _revealQuickActions(WidgetTester tester) async {
+  final homeList = find.byKey(
+    const PageStorageKey<String>('dear-home-scroll'),
+  );
+  await tester.dragUntilVisible(
+    find.byKey(const ValueKey('quick-action-omok')),
+    homeList,
+    const Offset(0, -320),
+  );
+  await tester.pumpAndSettle();
+}
+
+void _expectQuickActionCenters(WidgetTester tester) {
+  for (final glyph in _quickActionGlyphs) {
+    final tileCenter = tester.getCenter(
+      find.byKey(ValueKey('quick-action-$glyph')),
+    );
+    for (final part in <String>['icon', 'title', 'subtitle']) {
+      final partCenter = tester.getCenter(
+        find.byKey(ValueKey('quick-action-$glyph-$part')),
+      );
+      expect(
+        (partCenter.dx - tileCenter.dx).abs(),
+        lessThanOrEqualTo(1),
+        reason: '$glyph $part가 카드의 수평 중앙에 있어야 합니다.',
+      );
+    }
+  }
+}
+
+void _expectCompactQuickActionRowsAligned(WidgetTester tester) {
+  for (final part in <String>['icon', 'title', 'subtitle']) {
+    final referenceY = tester
+        .getCenter(find.byKey(ValueKey('quick-action-anniversary-$part')))
+        .dy;
+    for (final glyph in _quickActionGlyphs.skip(1)) {
+      final y = tester
+          .getCenter(find.byKey(ValueKey('quick-action-$glyph-$part')))
+          .dy;
+      expect(
+        (y - referenceY).abs(),
+        lessThanOrEqualTo(1),
+        reason: '3열 카드의 $part 세로 위치가 같아야 합니다.',
+      );
+    }
+  }
+}
+
+void _expectSingleColumnQuickActions(WidgetTester tester) {
+  final rects = _quickActionGlyphs
+      .map((glyph) =>
+          tester.getRect(find.byKey(ValueKey('quick-action-$glyph'))))
+      .toList(growable: false);
+
+  expect(rects[0].top, lessThan(rects[1].top));
+  expect(rects[1].top, lessThan(rects[2].top));
+  for (final rect in rects) {
+    expect(rect.left, closeTo(20, 0.01));
+    expect(rect.width, closeTo(280, 0.01));
+    expect(rect.height, greaterThanOrEqualTo(44));
+  }
+
+  for (final glyph in _quickActionGlyphs) {
+    final title = tester.widget<Text>(
+      find.byKey(ValueKey('quick-action-$glyph-title')),
+    );
+    final subtitle = tester.widget<Text>(
+      find.byKey(ValueKey('quick-action-$glyph-subtitle')),
+    );
+    expect(title.maxLines, isNull);
+    expect(title.overflow, isNot(TextOverflow.ellipsis));
+    expect(title.textAlign, TextAlign.center);
+    expect(subtitle.maxLines, isNull);
+    expect(subtitle.overflow, isNot(TextOverflow.ellipsis));
+    expect(subtitle.textAlign, TextAlign.center);
+  }
+}
+
+void _expectQuickActionSemanticsInReadingOrder(WidgetTester tester) {
+  final orderedKeys = find
+      .byWidgetPredicate((widget) {
+        final key = widget.key;
+        return widget is Semantics &&
+            key is ValueKey<String> &&
+            _quickActionGlyphs
+                .map((glyph) => 'quick-action-$glyph')
+                .contains(key.value);
+      })
+      .evaluate()
+      .map((element) => (element.widget.key! as ValueKey<String>).value)
+      .toList(growable: false);
+
+  expect(
+    orderedKeys,
+    const <String>[
+      'quick-action-anniversary',
+      'quick-action-koreaMap',
+      'quick-action-omok',
+    ],
+  );
+  for (final glyph in _quickActionGlyphs) {
+    final finder = find.byKey(ValueKey('quick-action-$glyph'));
+    final semanticsWidget = tester.widget<Semantics>(finder);
+    final semanticsNode = tester.getSemantics(finder);
+    expect(semanticsWidget.properties.button, isTrue);
+    expect(semanticsWidget.properties.onTap, isNotNull);
+    expect(semanticsNode.label, isNotEmpty);
+    expect(
+      semanticsNode.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+  }
+}
 
 Future<void> _pumpAccessibleHome(
   WidgetTester tester, {
   required Size size,
   required double textScale,
   ThemeData? theme,
+  Map<String, String> avatarUrls = const <String, String>{},
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -261,7 +453,7 @@ Future<void> _pumpAccessibleHome(
           (ref, id) => Stream.value(const <NotificationInboxItem>[]),
         ),
         coupleAvatarUrlMapProvider.overrideWith(
-          (ref, id) => Stream.value(const <String, String>{}),
+          (ref, id) => Stream.value(avatarUrls),
         ),
         coupleNicknameMapProvider.overrideWith(
           (ref, id) => Stream.value(
