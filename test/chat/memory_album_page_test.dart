@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:couple_chat_app/src/common/app_theme.dart';
+import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/common/dear_main_tab_nav.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
@@ -576,6 +578,15 @@ void main() {
     await tester.tap(find.text('최근 30일'));
     await tester.pumpAndSettle();
     expect(repository.lastCreatedAtOrAfter, isNotNull);
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('all-photo-date-filter')))
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected
+          .toBoolOrNull(),
+      isTrue,
+    );
 
     await tester.drag(
       find.byKey(const ValueKey('all-photo-filter-scroll')),
@@ -591,10 +602,73 @@ void main() {
 
     expect(repository.lastExcludedUploader, 'user-1');
     expect(find.text('상대가 올린 사진'), findsOneWidget);
+    final uploaderSemantics = tester.getSemantics(
+      find.byKey(const ValueKey('all-photo-uploader-filter-semantics')),
+    );
+    expect(
+      uploaderSemantics
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected
+          .toBoolOrNull(),
+      isTrue,
+    );
+    expect(uploaderSemantics.value, '상대가 올린 사진');
     expect(
         find.byKey(const ValueKey('memory-photo-photo-2.jpg')), findsOneWidget);
     expect(
         find.byKey(const ValueKey('memory-photo-photo-1.jpg')), findsNothing);
+  });
+
+  testWidgets('전체 사진 필터 배경은 라이트 모드에서 투명하고 칩 터치 영역을 유지한다', (tester) async {
+    final theme = AppTheme.light();
+    await pumpAlbum(tester, photos: photos, theme: theme);
+    await _openAllPhotos(tester);
+
+    _expectContinuousAllPhotoFilterBackground(tester);
+  });
+
+  testWidgets('전체 사진 필터 배경은 다크 모드에서도 투명하고 칩 터치 영역을 유지한다', (tester) async {
+    final theme = AppTheme.dark();
+    await pumpAlbum(tester, photos: photos, theme: theme);
+    await _openAllPhotos(tester);
+
+    _expectContinuousAllPhotoFilterBackground(tester);
+  });
+
+  testWidgets('전체 사진이 비어도 필터 뒤 DearBackground가 끊기지 않는다', (tester) async {
+    await pumpAlbum(tester, photos: const [], theme: AppTheme.light());
+    await _openAllPhotos(tester);
+
+    expect(
+        find.byKey(const ValueKey('all-photo-empty-message')), findsOneWidget);
+    _expectContinuousAllPhotoFilterBackground(tester);
+  });
+
+  testWidgets('전체 사진 로딩 중에도 필터 뒤 DearBackground가 끊기지 않는다', (tester) async {
+    final pendingPhotos = Completer<MemoryAlbumPhotoPage>();
+    await pumpAlbum(
+      tester,
+      theme: AppTheme.dark(),
+      repository: _FakeMemoryAlbumRepository(
+        albums: [album],
+        onFetchPhotoPage: (_) => pendingPhotos.future,
+      ),
+    );
+    await _openAllPhotos(tester);
+
+    expect(
+      find.byKey(const ValueKey('album-photo-loading-skeleton')),
+      findsOneWidget,
+    );
+    _expectContinuousAllPhotoFilterBackground(tester);
+
+    pendingPhotos.complete(const MemoryAlbumPhotoPage(
+      items: [],
+      nextCursor: null,
+      hasMore: false,
+    ));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('다중 선택 삭제는 확인 후 한 번만 실행되고 완료 뒤 목록을 갱신한다', (tester) async {
@@ -946,6 +1020,61 @@ Future<void> _openAllPhotos(WidgetTester tester) async {
   );
   await tester.tap(find.text('전체 보기'));
   await tester.pumpAndSettle();
+}
+
+void _expectContinuousAllPhotoFilterBackground(WidgetTester tester) {
+  final filterBackground =
+      find.byKey(const ValueKey('all-photo-filter-background'));
+  expect(filterBackground, findsOneWidget);
+
+  final material = tester.widget<Material>(filterBackground);
+  expect(material.type, MaterialType.transparency);
+  expect(material.color, isNull);
+  expect(
+    find.ancestor(
+      of: filterBackground,
+      matching: find.byType(DearBackground),
+    ),
+    findsOneWidget,
+  );
+
+  final colors = Theme.of(tester.element(filterBackground)).colorScheme;
+  final dateChip = tester.widget<InputChip>(
+    find.byKey(const ValueKey('all-photo-date-filter')),
+  );
+  final uploaderChip = tester.widget<Chip>(
+    find.descendant(
+      of: find.byKey(const ValueKey('all-photo-uploader-filter')),
+      matching: find.byType(Chip),
+    ),
+  );
+  expect(dateChip.side, BorderSide(color: colors.outline));
+  expect(uploaderChip.side, BorderSide(color: colors.outline));
+
+  for (final key in const <ValueKey<String>>[
+    ValueKey<String>('all-photo-date-filter'),
+    ValueKey<String>('all-photo-uploader-filter'),
+  ]) {
+    final chipTarget = find.byKey(key);
+    expect(chipTarget, findsOneWidget);
+    expect(
+      tester.getSize(chipTarget).height,
+      greaterThanOrEqualTo(DearTouchTargets.minimum),
+    );
+  }
+
+  for (final semanticsKey in const <ValueKey<String>>[
+    ValueKey<String>('all-photo-date-filter'),
+    ValueKey<String>('all-photo-uploader-filter-semantics'),
+  ]) {
+    expect(
+      tester
+          .getSemantics(find.byKey(semanticsKey))
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+  }
 }
 
 class _FakeMemoryAlbumRepository extends MemoryAlbumRepository {

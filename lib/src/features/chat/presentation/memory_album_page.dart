@@ -2847,8 +2847,13 @@ class _AllPhotoFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.albumColors;
+    final chipSide = BorderSide(color: colors.outline);
+    final uploaderFilterActive = uploaderFilter != _PhotoUploaderFilter.all;
+
     return Material(
-      color: context.albumColors.surface.withValues(alpha: 0.96),
+      key: const ValueKey('all-photo-filter-background'),
+      type: MaterialType.transparency,
       child: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
@@ -2861,34 +2866,50 @@ class _AllPhotoFilterBar extends StatelessWidget {
                 key: const ValueKey('all-photo-date-filter'),
                 avatar: const Icon(Icons.calendar_month_rounded, size: 18),
                 label: Text(_dateLabel),
+                selected: dateRange != null,
+                selectedColor: colors.primaryContainer,
+                showCheckmark: false,
+                side: chipSide,
                 tooltip: '사진 날짜 필터',
                 onPressed: enabled ? onChooseDate : null,
                 onDeleted: enabled ? onClearDate : null,
               ),
               const SizedBox(width: 8),
-              PopupMenuButton<_PhotoUploaderFilter>(
-                key: const ValueKey('all-photo-uploader-filter'),
+              Semantics(
+                key: const ValueKey('all-photo-uploader-filter-semantics'),
+                button: true,
                 enabled: enabled,
-                initialValue: uploaderFilter,
-                tooltip: '사진 업로더 필터',
-                onSelected: onUploaderChanged,
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: _PhotoUploaderFilter.all,
-                    child: Text('모든 업로더'),
+                selected: uploaderFilterActive,
+                label: '사진 업로더 필터',
+                value: _uploaderLabel,
+                child: PopupMenuButton<_PhotoUploaderFilter>(
+                  key: const ValueKey('all-photo-uploader-filter'),
+                  enabled: enabled,
+                  initialValue: uploaderFilter,
+                  tooltip: '사진 업로더 필터',
+                  onSelected: onUploaderChanged,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _PhotoUploaderFilter.all,
+                      child: Text('모든 업로더'),
+                    ),
+                    PopupMenuItem(
+                      value: _PhotoUploaderFilter.mine,
+                      child: Text('내가 올린 사진'),
+                    ),
+                    PopupMenuItem(
+                      value: _PhotoUploaderFilter.partner,
+                      child: Text('상대가 올린 사진'),
+                    ),
+                  ],
+                  child: Chip(
+                    avatar: const Icon(Icons.person_outline_rounded, size: 18),
+                    label: Text(_uploaderLabel),
+                    side: chipSide,
+                    backgroundColor: uploaderFilterActive
+                        ? colors.primaryContainer
+                        : colors.surface,
                   ),
-                  PopupMenuItem(
-                    value: _PhotoUploaderFilter.mine,
-                    child: Text('내가 올린 사진'),
-                  ),
-                  PopupMenuItem(
-                    value: _PhotoUploaderFilter.partner,
-                    child: Text('상대가 올린 사진'),
-                  ),
-                ],
-                child: Chip(
-                  avatar: const Icon(Icons.person_outline_rounded, size: 18),
-                  label: Text(_uploaderLabel),
                 ),
               ),
             ],
