@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:couple_chat_app/src/features/travel_map/data/travel_map_repository.dart';
+import 'package:couple_chat_app/src/features/travel_map/presentation/korea_map_label_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -156,7 +157,7 @@ class KoreaCityMapCanvas extends StatelessWidget {
     required this.colorByCityId,
     required this.onTapCity,
     required this.selectedCityId,
-    required this.labelScaleFactor,
+    required this.mapScale,
     this.currentLocationLngLat,
     super.key,
   });
@@ -165,7 +166,7 @@ class KoreaCityMapCanvas extends StatelessWidget {
   final Map<String, String> colorByCityId;
   final ValueChanged<TravelCity> onTapCity;
   final String? selectedCityId;
-  final double labelScaleFactor;
+  final double mapScale;
   final Offset? currentLocationLngLat;
 
   static Future<_KoreaGeoMapData>? _geoCache;
@@ -182,6 +183,7 @@ class KoreaCityMapCanvas extends StatelessWidget {
           city.id,
           city.code,
           city.name,
+          city.regionGroup,
           city.centerLat,
           city.centerLng,
         ),
@@ -245,6 +247,9 @@ class KoreaCityMapCanvas extends StatelessWidget {
           }
 
           final geo = snapshot.data!;
+          final labelScreenFontSize =
+              koreaMapScreenFontSize(MediaQuery.textScalerOf(context));
+          final labelTextStyle = Theme.of(context).textTheme.labelMedium;
           return LayoutBuilder(
             builder: (context, constraints) {
               final size = Size(
@@ -278,7 +283,10 @@ class KoreaCityMapCanvas extends StatelessWidget {
                     prepared: prepared,
                     colorByCityId: colorByCityId,
                     selectedCityId: selectedCityId,
-                    labelScaleFactor: labelScaleFactor,
+                    mapScale: mapScale,
+                    labelScreenFontSize: labelScreenFontSize,
+                    labelFontFamily: labelTextStyle?.fontFamily,
+                    labelFontFamilyFallback: labelTextStyle?.fontFamilyFallback,
                     currentLocationPoint: currentLocationLngLat == null
                         ? null
                         : projectKoreaLocationToCanvas(
@@ -390,6 +398,7 @@ class _PreparedKoreaMap {
     required this.regions,
     required this.cityById,
     required this.cityLabelPoints,
+    required this.regionGroupLabelPoints,
     required this.cityBoundaryPaths,
     required this.mapRect,
   });
@@ -397,6 +406,7 @@ class _PreparedKoreaMap {
   final List<_PreparedRegion> regions;
   final Map<String, TravelCity> cityById;
   final Map<String, Offset> cityLabelPoints;
+  final Map<String, Offset> regionGroupLabelPoints;
   final Map<String, Path> cityBoundaryPaths;
   final Rect mapRect;
 
@@ -488,11 +498,43 @@ class _PreparedKoreaMap {
               entry.value.getBounds().center,
         ),
     };
+    final regionGroupBounds = <String, Rect>{};
+    final cityIdsByRegionGroup = <String, List<String>>{};
+    for (final entry in cityBoundaryPaths.entries) {
+      final city = cityById[entry.key];
+      final group = city?.regionGroup.trim() ?? '';
+      final bounds = entry.value.getBounds();
+      if (group.isEmpty || bounds.isEmpty) continue;
+      regionGroupBounds.update(
+        group,
+        (current) => current.expandToInclude(bounds),
+        ifAbsent: () => bounds,
+      );
+      cityIdsByRegionGroup.putIfAbsent(group, () => []).add(entry.key);
+    }
+    final regionGroupLabelPoints = <String, Offset>{};
+    for (final entry in cityIdsByRegionGroup.entries) {
+      final target = regionGroupBounds[entry.key]?.center;
+      if (target == null) continue;
+      Offset? nearest;
+      var nearestDistance = double.infinity;
+      for (final cityId in entry.value) {
+        final point = cityLabelPoints[cityId];
+        if (point == null) continue;
+        final distance = (point - target).distanceSquared;
+        if (distance < nearestDistance) {
+          nearest = point;
+          nearestDistance = distance;
+        }
+      }
+      if (nearest != null) regionGroupLabelPoints[entry.key] = nearest;
+    }
 
     return _PreparedKoreaMap(
       regions: preparedRegions,
       cityById: cityById,
       cityLabelPoints: cityLabelPoints,
+      regionGroupLabelPoints: regionGroupLabelPoints,
       cityBoundaryPaths: cityBoundaryPaths,
       mapRect: projection.mapRect,
     );
@@ -561,19 +603,26 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
     required this.prepared,
     required this.colorByCityId,
     required this.selectedCityId,
-    required this.labelScaleFactor,
+    required this.mapScale,
+    required this.labelScreenFontSize,
+    required this.labelFontFamily,
+    required this.labelFontFamilyFallback,
     required this.currentLocationPoint,
   });
 
   final _PreparedKoreaMap prepared;
   final Map<String, String> colorByCityId;
   final String? selectedCityId;
-  final double labelScaleFactor;
+  final double mapScale;
+  final double labelScreenFontSize;
+  final String? labelFontFamily;
+  final List<String>? labelFontFamilyFallback;
   final Offset? currentLocationPoint;
 
   @override
   void paint(Canvas canvas, Size size) {
-    _drawSeaLabels(canvas, prepared.mapRect);
+    final canvasUnitScale = 1 / mapScale.clamp(0.34, 3.8).toDouble();
+    _drawSeaLabels(canvas, prepared.mapRect, canvasUnitScale);
 
     final landFillPaint = Paint()
       ..color = const Color(0xFFFBF7EF)
@@ -630,37 +679,11 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
       canvas.drawPath(entry.value, outerPaint);
     }
 
-    final safeLabelScale = labelScaleFactor.clamp(0.28, 1.0).toDouble();
-    prepared.cityLabelPoints.forEach((cityId, point) {
-      final city = prepared.cityById[cityId];
-      if (city == null) return;
-      final label = _displayCityName(city.name);
-      final selected = selectedCityId == cityId;
-      final shouldShowRegionLabel = labelScaleFactor <= 0.98;
-      if (!selected && !shouldShowRegionLabel) return;
-      final fontSize = (selected ? 15.0 : 12.4) * safeLabelScale;
-      final cityPath = prepared.cityBoundaryPaths[cityId];
-      final cityBounds = cityPath?.getBounds();
-      if (cityPath == null || cityBounds == null || cityBounds.isEmpty) return;
-
-      if (selected) {
-        _drawSelectedCityPill(canvas, point, label, safeLabelScale);
-        return;
-      }
-
-      final fittedLabel = _fitRegionLabel(
-        label: label,
-        cityBounds: cityBounds,
-        preferredCenter: point,
-        maxFontSize: fontSize,
-      );
-      if (fittedLabel == null) return;
-      fittedLabel.painter.paint(canvas, fittedLabel.offset);
-    });
+    _drawAdaptiveRegionLabels(canvas, canvasUnitScale);
 
     final locationPoint = currentLocationPoint;
     if (locationPoint != null) {
-      final markerScale = labelScaleFactor.clamp(0.28, 1.0).toDouble();
+      final markerScale = canvasUnitScale;
       canvas.drawCircle(
         locationPoint,
         12 * markerScale,
@@ -683,7 +706,325 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
     return Color.lerp(color, Colors.white, 0.28)!.withValues(alpha: 0.92);
   }
 
-  void _drawSeaLabels(Canvas canvas, Rect mapRect) {
+  void _drawAdaptiveRegionLabels(Canvas canvas, double canvasUnitScale) {
+    final density = koreaMapLabelDensityForScale(mapScale);
+    final occupiedRects = <Rect>[];
+    final selectedCity =
+        selectedCityId == null ? null : prepared.cityById[selectedCityId];
+    final selectedPoint = selectedCityId == null
+        ? null
+        : prepared.cityLabelPoints[selectedCityId];
+    if (selectedCity != null && selectedPoint != null) {
+      occupiedRects.add(
+        _selectedCityPillBounds(
+          selectedPoint,
+          _displayCityName(selectedCity.name),
+          canvasUnitScale,
+        ).inflate(3 * canvasUnitScale),
+      );
+    }
+    final locationPoint = currentLocationPoint;
+    if (locationPoint != null) {
+      occupiedRects.add(
+        Rect.fromCircle(
+          center: locationPoint,
+          radius: 15 * canvasUnitScale,
+        ),
+      );
+    }
+
+    final candidates = <_KoreaLabelCandidate>[];
+    if (density == KoreaMapLabelDensity.overview) {
+      for (final entry in prepared.regionGroupLabelPoints.entries) {
+        if (selectedCity != null &&
+            _displayCityName(selectedCity.name) == entry.key) {
+          continue;
+        }
+        candidates.add(
+          _KoreaLabelCandidate(
+            id: 'group:${entry.key}',
+            label: entry.key,
+            anchor: entry.value,
+            regionBounds: Rect.fromCircle(
+              center: entry.value,
+              radius: canvasUnitScale,
+            ),
+            cityPath: null,
+            priority: 1,
+            isGroup: true,
+            allowOverlapFallback: true,
+          ),
+        );
+      }
+    }
+
+    for (final entry in prepared.cityLabelPoints.entries) {
+      final cityId = entry.key;
+      if (cityId == selectedCityId) continue;
+      final city = prepared.cityById[cityId];
+      final cityPath = prepared.cityBoundaryPaths[cityId];
+      if (city == null || cityPath == null) continue;
+      final cityBounds = cityPath.getBounds();
+      if (cityBounds.isEmpty) continue;
+      final isVisited = colorByCityId.containsKey(cityId);
+      if (density == KoreaMapLabelDensity.overview &&
+          city.name.trim() == city.regionGroup.trim() &&
+          prepared.regionGroupLabelPoints.containsKey(city.regionGroup)) {
+        continue;
+      }
+      final shouldShow = switch (density) {
+        KoreaMapLabelDensity.overview => isVisited,
+        KoreaMapLabelDensity.regional =>
+          isVisited || _isRegionalLabelCandidate(city, cityBounds),
+        KoreaMapLabelDensity.detailed => true,
+      };
+      if (!shouldShow) continue;
+      candidates.add(
+        _KoreaLabelCandidate(
+          id: cityId,
+          label: _displayCityName(city.name),
+          anchor: entry.value,
+          regionBounds: cityBounds,
+          cityPath: cityPath,
+          priority: isVisited ? 2 : 3,
+          isGroup: false,
+          allowOverlapFallback:
+              density == KoreaMapLabelDensity.detailed || isVisited,
+        ),
+      );
+    }
+
+    candidates.sort((left, right) {
+      final priority = left.priority.compareTo(right.priority);
+      if (priority != 0) return priority;
+      final size = right.regionBounds.size.longestSide
+          .compareTo(left.regionBounds.size.longestSide);
+      if (size != 0) return size;
+      return left.id.compareTo(right.id);
+    });
+
+    for (final candidate in candidates) {
+      _drawLabelCandidate(
+        canvas,
+        candidate,
+        canvasUnitScale,
+        occupiedRects,
+      );
+    }
+
+    if (selectedCity != null && selectedPoint != null) {
+      _drawSelectedCityPill(
+        canvas,
+        selectedPoint,
+        _displayCityName(selectedCity.name),
+        canvasUnitScale,
+      );
+    }
+  }
+
+  bool _isRegionalLabelCandidate(TravelCity city, Rect bounds) {
+    if (city.code.startsWith('METRO_')) return true;
+    final screenWidth = bounds.width * mapScale;
+    final screenHeight = bounds.height * mapScale;
+    return screenWidth >= 46 && screenHeight >= 26;
+  }
+
+  void _drawLabelCandidate(
+    Canvas canvas,
+    _KoreaLabelCandidate candidate,
+    double canvasUnitScale,
+    List<Rect> occupiedRects,
+  ) {
+    final screenFontSize = candidate.isGroup
+        ? (labelScreenFontSize + 1).clamp(11, 17).toDouble()
+        : labelScreenFontSize;
+    final fontSize = koreaMapCanvasFontSize(
+      screenFontSize: screenFontSize,
+      mapScale: mapScale,
+    );
+    final textPainter = _buildLabelPainter(
+      candidate.label,
+      fontSize: fontSize,
+      color:
+          candidate.isGroup ? const Color(0xFF9D3A61) : const Color(0xFF6D4F59),
+      fontWeight: candidate.isGroup ? FontWeight.w900 : FontWeight.w800,
+    );
+    final inlineRect = Rect.fromCenter(
+      center: candidate.anchor,
+      width: textPainter.width,
+      height: textPainter.height,
+    );
+    final forceCallout = candidate.isGroup ||
+        candidate.cityPath == null ||
+        !_pathContainsRect(candidate.cityPath!, inlineRect);
+    final placement = placeKoreaMapLabel(
+      mapRect: prepared.mapRect,
+      regionBounds: forceCallout
+          ? _calloutOriginBounds(
+              candidate.regionBounds,
+              candidate.anchor,
+              canvasUnitScale,
+            )
+          : candidate.regionBounds,
+      anchor: candidate.anchor,
+      inlineSize: textPainter.size,
+      calloutSize: Size(
+        textPainter.width + 12 * canvasUnitScale,
+        textPainter.height + 8 * canvasUnitScale,
+      ),
+      spacing: 5 * canvasUnitScale,
+      occupiedRects: occupiedRects,
+      forceCallout: forceCallout,
+    );
+    if (placement.overlapsExisting && !candidate.allowOverlapFallback) return;
+
+    if (placement.isCallout) {
+      _drawCalloutLabel(
+        canvas,
+        candidate: candidate,
+        placement: placement,
+        textPainter: textPainter,
+        canvasUnitScale: canvasUnitScale,
+      );
+    } else {
+      _drawInlineLabel(
+        canvas,
+        candidate.label,
+        placement.rect.topLeft,
+        textPainter,
+        canvasUnitScale,
+      );
+    }
+    occupiedRects.add(placement.rect.inflate(3 * canvasUnitScale));
+  }
+
+  Rect _calloutOriginBounds(
+    Rect regionBounds,
+    Offset anchor,
+    double canvasUnitScale,
+  ) {
+    final localBounds = Rect.fromCenter(
+      center: anchor,
+      width: 40 * canvasUnitScale,
+      height: 40 * canvasUnitScale,
+    );
+    final bounded = regionBounds.intersect(localBounds);
+    return bounded.isEmpty
+        ? Rect.fromCircle(center: anchor, radius: canvasUnitScale)
+        : bounded;
+  }
+
+  TextPainter _buildLabelPainter(
+    String label, {
+    required double fontSize,
+    required Color color,
+    required FontWeight fontWeight,
+    Paint? foreground,
+  }) {
+    return TextPainter(
+      textDirection: TextDirection.ltr,
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: foreground == null ? color : null,
+          foreground: foreground,
+          fontFamily: labelFontFamily,
+          fontFamilyFallback: labelFontFamilyFallback,
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          height: 1,
+        ),
+      ),
+    )..layout();
+  }
+
+  void _drawInlineLabel(
+    Canvas canvas,
+    String label,
+    Offset offset,
+    TextPainter textPainter,
+    double canvasUnitScale,
+  ) {
+    final outline = _buildLabelPainter(
+      label,
+      fontSize: textPainter.text?.style?.fontSize ?? 11 * canvasUnitScale,
+      color: Colors.white,
+      fontWeight: FontWeight.w800,
+      foreground: Paint()
+        ..color = Colors.white.withValues(alpha: 0.96)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.6 * canvasUnitScale,
+    );
+    outline.paint(canvas, offset);
+    textPainter.paint(canvas, offset);
+  }
+
+  void _drawCalloutLabel(
+    Canvas canvas, {
+    required _KoreaLabelCandidate candidate,
+    required KoreaMapLabelPlacement placement,
+    required TextPainter textPainter,
+    required double canvasUnitScale,
+  }) {
+    final leaderEnd = placement.leaderEndFor(candidate.anchor);
+    canvas.drawLine(
+      candidate.anchor,
+      leaderEnd,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.96)
+        ..strokeWidth = 3.6 * canvasUnitScale
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawLine(
+      candidate.anchor,
+      leaderEnd,
+      Paint()
+        ..color = candidate.isGroup
+            ? const Color(0xFFD05C86)
+            : const Color(0xFFB76983)
+        ..strokeWidth = 1.35 * canvasUnitScale
+        ..strokeCap = StrokeCap.round,
+    );
+
+    final rrect = RRect.fromRectAndRadius(
+      placement.rect,
+      Radius.circular(6 * canvasUnitScale),
+    );
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = candidate.isGroup
+            ? const Color(0xFFFFF7FA).withValues(alpha: 0.97)
+            : Colors.white.withValues(alpha: 0.94),
+    );
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = candidate.isGroup
+            ? const Color(0xFFE58EAC)
+            : const Color(0xFFE6BBC8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = canvasUnitScale,
+    );
+    textPainter.paint(
+      canvas,
+      placement.rect.center -
+          Offset(textPainter.width / 2, textPainter.height / 2),
+    );
+  }
+
+  bool _pathContainsRect(Path path, Rect rect) =>
+      path.contains(rect.topLeft) &&
+      path.contains(rect.topRight) &&
+      path.contains(rect.bottomLeft) &&
+      path.contains(rect.bottomRight) &&
+      path.contains(rect.center);
+
+  void _drawSeaLabels(
+    Canvas canvas,
+    Rect mapRect,
+    double canvasUnitScale,
+  ) {
     _drawMapLabel(
       canvas,
       '서해',
@@ -691,6 +1032,7 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
         mapRect.left + mapRect.width * 0.13,
         mapRect.top + mapRect.height * 0.48,
       ),
+      canvasUnitScale,
     );
     _drawMapLabel(
       canvas,
@@ -699,6 +1041,7 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
         mapRect.left + mapRect.width * 0.77,
         mapRect.top + mapRect.height * 0.34,
       ),
+      canvasUnitScale,
     );
     _drawMapLabel(
       canvas,
@@ -707,17 +1050,25 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
         mapRect.left + mapRect.width * 0.52,
         mapRect.top + mapRect.height * 0.79,
       ),
+      canvasUnitScale,
     );
   }
 
-  void _drawMapLabel(Canvas canvas, String label, Offset center) {
+  void _drawMapLabel(
+    Canvas canvas,
+    String label,
+    Offset center,
+    double canvasUnitScale,
+  ) {
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       text: TextSpan(
         text: label,
-        style: const TextStyle(
-          color: Color(0xFF96B7C7),
-          fontSize: 18,
+        style: TextStyle(
+          color: const Color(0xFF96B7C7),
+          fontSize: 14 * canvasUnitScale,
+          fontFamily: labelFontFamily,
+          fontFamilyFallback: labelFontFamilyFallback,
           fontWeight: FontWeight.w700,
           height: 1,
         ),
@@ -729,34 +1080,55 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
     );
   }
 
+  Rect _selectedCityPillBounds(
+    Offset center,
+    String label,
+    double canvasUnitScale,
+  ) {
+    final fontSize =
+        (labelScreenFontSize + 3).clamp(14, 19).toDouble() * canvasUnitScale;
+    final textPainter = _buildLabelPainter(
+      label,
+      fontSize: fontSize,
+      color: Colors.white,
+      fontWeight: FontWeight.w900,
+    );
+    final pillRect = Rect.fromCenter(
+      center: center.translate(0, -20 * canvasUnitScale),
+      width: textPainter.width + 26 * canvasUnitScale,
+      height: textPainter.height + 16 * canvasUnitScale,
+    );
+    return pillRect.expandToInclude(
+      Rect.fromCircle(
+        center: center.translate(0, 7 * canvasUnitScale),
+        radius: 7 * canvasUnitScale,
+      ),
+    );
+  }
+
   void _drawSelectedCityPill(
     Canvas canvas,
     Offset center,
     String label,
-    double scale,
+    double canvasUnitScale,
   ) {
-    final fontSize = 15.0 * scale;
-    final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w900,
-          height: 1,
-        ),
-      ),
-    )..layout();
+    final fontSize =
+        (labelScreenFontSize + 3).clamp(14, 19).toDouble() * canvasUnitScale;
+    final textPainter = _buildLabelPainter(
+      label,
+      fontSize: fontSize,
+      color: Colors.white,
+      fontWeight: FontWeight.w900,
+    );
 
     final pillRect = Rect.fromCenter(
-      center: center.translate(0, -18 * scale),
-      width: textPainter.width + 26 * scale,
-      height: textPainter.height + 16 * scale,
+      center: center.translate(0, -20 * canvasUnitScale),
+      width: textPainter.width + 26 * canvasUnitScale,
+      height: textPainter.height + 16 * canvasUnitScale,
     );
     final rrect = RRect.fromRectAndRadius(
       pillRect,
-      Radius.circular(12 * scale),
+      Radius.circular(12 * canvasUnitScale),
     );
     canvas.drawRRect(
       rrect,
@@ -769,74 +1141,17 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
       pillRect.center - Offset(textPainter.width / 2, textPainter.height / 2),
     );
     canvas.drawCircle(
-      center.translate(0, 7 * scale),
-      4.2 * scale,
+      center.translate(0, 7 * canvasUnitScale),
+      4.2 * canvasUnitScale,
       Paint()..color = const Color(0xFFEF6F89),
     );
     canvas.drawCircle(
-      center.translate(0, 7 * scale),
-      6.8 * scale,
+      center.translate(0, 7 * canvasUnitScale),
+      6.8 * canvasUnitScale,
       Paint()
         ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2 * scale,
-    );
-  }
-
-  _FittedRegionLabel? _fitRegionLabel({
-    required String label,
-    required Rect cityBounds,
-    required Offset preferredCenter,
-    required double maxFontSize,
-  }) {
-    const minFontSize = 1.8;
-    final largestFontSize = math.max(minFontSize, maxFontSize);
-
-    TextPainter buildPainter(double fontSize) => TextPainter(
-          textDirection: TextDirection.ltr,
-          text: TextSpan(
-            text: label,
-            style: TextStyle(
-              fontSize: fontSize,
-              color: const Color(0xFF6D4F59),
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-        )..layout();
-
-    var textPainter = buildPainter(largestFontSize);
-    final widthScale = cityBounds.width <= 0
-        ? 0.0
-        : cityBounds.width * 0.82 / textPainter.width;
-    final heightScale = cityBounds.height <= 0
-        ? 0.0
-        : cityBounds.height * 0.70 / textPainter.height;
-    final fitScale = math.min(1.0, math.min(widthScale, heightScale));
-    if (fitScale <= 0) return null;
-    final fittedFontSize =
-        (largestFontSize * fitScale).clamp(minFontSize, largestFontSize);
-    if ((fittedFontSize - largestFontSize).abs() > 0.01) {
-      textPainter = buildPainter(fittedFontSize.toDouble());
-    }
-
-    final halfWidth = textPainter.width / 2;
-    final halfHeight = textPainter.height / 2;
-    if (cityBounds.width < textPainter.width ||
-        cityBounds.height < textPainter.height) {
-      return null;
-    }
-    final center = Offset(
-      preferredCenter.dx
-          .clamp(cityBounds.left + halfWidth, cityBounds.right - halfWidth)
-          .toDouble(),
-      preferredCenter.dy
-          .clamp(cityBounds.top + halfHeight, cityBounds.bottom - halfHeight)
-          .toDouble(),
-    );
-    return _FittedRegionLabel(
-      painter: textPainter,
-      offset: center - Offset(halfWidth, halfHeight),
+        ..strokeWidth = 2 * canvasUnitScale,
     );
   }
 
@@ -859,17 +1174,32 @@ class _KoreaAdministrativeMapPainter extends CustomPainter {
     return oldDelegate.prepared != prepared ||
         oldDelegate.colorByCityId != colorByCityId ||
         oldDelegate.selectedCityId != selectedCityId ||
-        oldDelegate.labelScaleFactor != labelScaleFactor ||
+        oldDelegate.mapScale != mapScale ||
+        oldDelegate.labelScreenFontSize != labelScreenFontSize ||
+        oldDelegate.labelFontFamily != labelFontFamily ||
+        oldDelegate.labelFontFamilyFallback != labelFontFamilyFallback ||
         oldDelegate.currentLocationPoint != currentLocationPoint;
   }
 }
 
-class _FittedRegionLabel {
-  const _FittedRegionLabel({
-    required this.painter,
-    required this.offset,
+class _KoreaLabelCandidate {
+  const _KoreaLabelCandidate({
+    required this.id,
+    required this.label,
+    required this.anchor,
+    required this.regionBounds,
+    required this.cityPath,
+    required this.priority,
+    required this.isGroup,
+    required this.allowOverlapFallback,
   });
 
-  final TextPainter painter;
-  final Offset offset;
+  final String id;
+  final String label;
+  final Offset anchor;
+  final Rect regionBounds;
+  final Path? cityPath;
+  final int priority;
+  final bool isGroup;
+  final bool allowOverlapFallback;
 }

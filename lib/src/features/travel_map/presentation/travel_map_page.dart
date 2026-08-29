@@ -691,8 +691,7 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
                         cities: cities,
                         colorByCityId: colorsByCityId,
                         selectedCityId: _selectedCityId,
-                        labelScaleFactor: 1 /
-                            _currentMapScale.clamp(1, _maxMapScale).toDouble(),
+                        mapScale: _currentMapScale,
                         currentLocationLngLat: _currentLocation == null
                             ? null
                             : Offset(

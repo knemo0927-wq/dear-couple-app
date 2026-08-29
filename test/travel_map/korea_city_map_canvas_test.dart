@@ -468,87 +468,208 @@ void main() {
     });
   });
 
-  testWidgets('신규 지역은 선택되고 목록 밖 지역은 가까운 도시로 대체되지 않는다', (tester) async {
-    tester.view.physicalSize = const Size(400, 600);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('지도 painter는 overview 권역·소지역 callout·탭 경계를 유지한다', (tester) async {
+    // KoreaCityMapCanvas caches the asset Future. Keep all widget-level canvas
+    // checks in one test zone so later FutureBuilders can reuse it safely.
+    {
+      const mapKey = ValueKey('korea-map-overview-painter');
+      final cities = [
+        _city(
+          code: 'METRO_11',
+          name: '서울',
+          regionGroup: '서울',
+          centerLat: 37.5665,
+          centerLng: 126.978,
+        ),
+        _city(
+          code: 'METRO_21',
+          name: '부산',
+          regionGroup: '부산',
+          centerLat: 35.1796,
+          centerLng: 129.0756,
+        ),
+      ];
 
-    final suwon = _city(code: 'SIG_31014', name: '수원');
-    final hwaseong = _city(code: 'SIG_31240', name: '화성');
-    final cities = [suwon, hwaseong];
-    var tapCount = 0;
-    TravelCity? tappedCity;
-    const mapKey = ValueKey('korea-map-hit-test');
+      final painter = await _pumpKoreaMapPainter(
+        tester,
+        mapKey: mapKey,
+        cities: cities,
+        mapScale: 0.625,
+      );
+      final canvas = TestRecordingCanvas();
+      painter.paint(canvas, const Size(360, 520));
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Center(
-          child: SizedBox(
-            key: mapKey,
-            width: 360,
-            height: 520,
-            child: KoreaCityMapCanvas(
-              cities: cities,
-              colorByCityId: const {},
-              selectedCityId: null,
-              labelScaleFactor: 1,
-              onTapCity: (city) {
-                tapCount++;
-                tappedCity = city;
-              },
+      final paragraphCount = _canvasCallCount(canvas, #drawParagraph);
+      expect(
+        paragraphCount,
+        greaterThan(3),
+        reason: '서해·동해·대한해협 3개 외에 overview 권역 라벨이 그려져야 함',
+      );
+    }
+
+    {
+      const mapKey = ValueKey('korea-map-small-region-callout-painter');
+      final gwangmyeong = _city(
+        code: 'SIG_31060',
+        name: '광명',
+        regionGroup: '경기',
+        centerLat: 37.4786,
+        centerLng: 126.8644,
+      );
+
+      final painter = await _pumpKoreaMapPainter(
+        tester,
+        mapKey: mapKey,
+        cities: [gwangmyeong],
+        mapScale: 2.15,
+      );
+      final canvas = TestRecordingCanvas();
+      painter.paint(canvas, const Size(360, 520));
+
+      expect(
+        _canvasCallCount(canvas, #drawLine),
+        greaterThan(0),
+        reason: '작은 지역과 외부 라벨을 잇는 leader line이 그려져야 함',
+      );
+      expect(
+        _canvasCallCount(canvas, #drawRRect),
+        greaterThan(0),
+        reason: '작은 지역 라벨의 callout 배경이 그려져야 함',
+      );
+    }
+
+    {
+      tester.view.physicalSize = const Size(400, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final suwon = _city(code: 'SIG_31014', name: '수원');
+      final hwaseong = _city(code: 'SIG_31240', name: '화성');
+      final cities = [suwon, hwaseong];
+      var tapCount = 0;
+      TravelCity? tappedCity;
+      const mapKey = ValueKey('korea-map-hit-test');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox(
+              key: mapKey,
+              width: 360,
+              height: 520,
+              child: KoreaCityMapCanvas(
+                cities: cities,
+                colorByCityId: const {},
+                selectedCityId: null,
+                mapScale: 1,
+                onTapCity: (city) {
+                  tapCount++;
+                  tappedCity = city;
+                },
+              ),
             ),
           ),
         ),
-      ),
-    );
-    for (var i = 0;
-        i < 20 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
-        i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
+      for (var i = 0;
+          i < 20 &&
+              find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+          i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      final mapTopLeft = tester.getTopLeft(find.byKey(mapKey));
+      final suwonPoint = projectKoreaLocationToCanvas(
+        size: const Size(360, 520),
+        cities: cities,
+        latitude: 37.2636,
+        longitude: 127.0286,
+      );
+      await tester.tapAt(mapTopLeft + suwonPoint);
       await tester.pump();
+
+      expect(tapCount, 1);
+      expect(tappedCity, same(suwon));
+
+      final hwaseongPoint = projectKoreaLocationToCanvas(
+        size: const Size(360, 520),
+        cities: cities,
+        latitude: 37.1996,
+        longitude: 126.8312,
+      );
+      await tester.tapAt(mapTopLeft + hwaseongPoint);
+      await tester.pump();
+
+      expect(tapCount, 2);
+      expect(tappedCity, same(hwaseong));
+
+      final pyeongtaekPoint = projectKoreaLocationToCanvas(
+        size: const Size(360, 520),
+        cities: cities,
+        latitude: 36.9921,
+        longitude: 127.1129,
+      );
+      await tester.tapAt(mapTopLeft + pyeongtaekPoint);
+      await tester.pump();
+
+      expect(tapCount, 2, reason: '목록에 없는 평택시가 가까운 도시로 선택되면 안 됨');
     }
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-
-    final mapTopLeft = tester.getTopLeft(find.byKey(mapKey));
-    final suwonPoint = projectKoreaLocationToCanvas(
-      size: const Size(360, 520),
-      cities: cities,
-      latitude: 37.2636,
-      longitude: 127.0286,
-    );
-    await tester.tapAt(mapTopLeft + suwonPoint);
-    await tester.pump();
-
-    expect(tapCount, 1);
-    expect(tappedCity, same(suwon));
-
-    final hwaseongPoint = projectKoreaLocationToCanvas(
-      size: const Size(360, 520),
-      cities: cities,
-      latitude: 37.1996,
-      longitude: 126.8312,
-    );
-    await tester.tapAt(mapTopLeft + hwaseongPoint);
-    await tester.pump();
-
-    expect(tapCount, 2);
-    expect(tappedCity, same(hwaseong));
-
-    final pyeongtaekPoint = projectKoreaLocationToCanvas(
-      size: const Size(360, 520),
-      cities: cities,
-      latitude: 36.9921,
-      longitude: 127.1129,
-    );
-    await tester.tapAt(mapTopLeft + pyeongtaekPoint);
-    await tester.pump();
-
-    expect(tapCount, 2, reason: '목록에 없는 평택시가 가까운 도시로 선택되면 안 됨');
   });
 }
+
+Future<CustomPainter> _pumpKoreaMapPainter(
+  WidgetTester tester, {
+  required Key mapKey,
+  required List<TravelCity> cities,
+  required double mapScale,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Center(
+        child: SizedBox(
+          key: mapKey,
+          width: 360,
+          height: 520,
+          child: KoreaCityMapCanvas(
+            cities: cities,
+            colorByCityId: const {},
+            selectedCityId: null,
+            mapScale: mapScale,
+            onTapCity: (_) {},
+          ),
+        ),
+      ),
+    ),
+  );
+  for (var i = 0;
+      i < 20 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+      i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump();
+  }
+  expect(find.byType(CircularProgressIndicator), findsNothing);
+
+  final customPaintFinder = find.descendant(
+    of: find.byKey(mapKey),
+    matching: find.byType(CustomPaint),
+  );
+  expect(customPaintFinder, findsOneWidget);
+  final customPaint = tester.widget<CustomPaint>(customPaintFinder);
+  expect(customPaint.painter, isNotNull);
+  return customPaint.painter!;
+}
+
+int _canvasCallCount(TestRecordingCanvas canvas, Symbol methodName) =>
+    canvas.invocations
+        .where((recorded) => recorded.invocation.memberName == methodName)
+        .length;
 
 void _visitCoordinates(
   dynamic value,
@@ -604,14 +725,20 @@ List<TravelCity> _seedCitiesFromMigration(String path) {
   ];
 }
 
-TravelCity _city({required String code, required String name}) {
+TravelCity _city({
+  required String code,
+  required String name,
+  String regionGroup = '테스트',
+  double centerLat = 36.5,
+  double centerLng = 127.5,
+}) {
   return TravelCity(
     id: code,
     code: code,
     name: name,
-    regionGroup: '테스트',
-    centerLat: 36.5,
-    centerLng: 127.5,
+    regionGroup: regionGroup,
+    centerLat: centerLat,
+    centerLng: centerLng,
     sortOrder: 0,
   );
 }
