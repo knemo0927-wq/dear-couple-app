@@ -385,6 +385,7 @@ Future<void> main() async {
         notificationInboxProvider.overrideWith(
           (ref, userId) => Stream.value(const <NotificationInboxItem>[]),
         ),
+        enforceDomesticTravelCatalogIntegrityProvider.overrideWithValue(false),
         travelCitiesProvider.overrideWith((ref) async => previewCities),
         travelCityVisitsProvider.overrideWith(
           (ref, coupleId) => Stream.value(previewCityVisits),

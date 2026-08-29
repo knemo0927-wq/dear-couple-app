@@ -1,6 +1,7 @@
 import 'package:couple_chat_app/src/common/dear_design.dart';
 import 'package:couple_chat_app/src/common/error_mapper.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
+import 'package:couple_chat_app/src/features/travel_map/data/domestic_travel_catalog_integrity.dart';
 import 'package:couple_chat_app/src/features/travel_map/data/map_location_service.dart';
 import 'package:couple_chat_app/src/features/travel_map/data/travel_map_providers.dart';
 import 'package:couple_chat_app/src/features/travel_map/data/travel_map_repository.dart';
@@ -536,6 +537,22 @@ class _TravelMapPageState extends ConsumerState<TravelMapPage>
                 appBar: _topBar(onMenuSelected: _showLoadingMenuMessage),
                 body: TravelMapErrorState(
                   message: '표시할 지역 정보가 아직 없어요.',
+                  onRetry: () => ref.invalidate(travelCitiesProvider),
+                ),
+              );
+            }
+            final catalogIntegrity =
+                DomesticTravelCatalogIntegrity.inspect(cities);
+            if (ref.watch(enforceDomesticTravelCatalogIntegrityProvider) &&
+                !catalogIntegrity.isComplete) {
+              debugPrint(
+                'Domestic travel catalog integrity failed: '
+                '${catalogIntegrity.diagnosticSummary}',
+              );
+              return Scaffold(
+                appBar: _topBar(onMenuSelected: _showLoadingMenuMessage),
+                body: TravelMapErrorState(
+                  message: '지역 정보가 최신 상태가 아니에요.\n잠시 후 다시 시도해 주세요.',
                   onRetry: () => ref.invalidate(travelCitiesProvider),
                 ),
               );

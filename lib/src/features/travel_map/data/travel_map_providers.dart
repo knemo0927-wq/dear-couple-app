@@ -35,6 +35,11 @@ final travelCitiesProvider = FutureProvider<List<TravelCity>>((ref) {
   return ref.watch(travelMapRepositoryProvider).fetchCities();
 });
 
+/// Production catalog validation can be disabled by previews and focused widget
+/// tests that intentionally provide only a few synthetic regions.
+final enforceDomesticTravelCatalogIntegrityProvider =
+    Provider<bool>((ref) => true);
+
 final travelCityVisitsProvider =
     StreamProvider.family<List<TravelCityVisit>, String>((ref, coupleId) {
   return ref.watch(travelMapRepositoryProvider).watchVisits(coupleId);

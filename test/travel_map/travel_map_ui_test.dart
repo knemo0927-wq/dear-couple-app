@@ -41,6 +41,8 @@ void main() {
       ProviderScope(
         overrides: [
           myProfileProvider.overrideWith((ref) async => profile),
+          enforceDomesticTravelCatalogIntegrityProvider
+              .overrideWithValue(false),
           travelCitiesProvider.overrideWith(
             (ref) async => const [
               TravelCity(
@@ -206,6 +208,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('불완전한 132개 운영 카탈로그는 잘못된 지도 대신 복구 안내를 표시한다', (tester) async {
+    final incompleteCatalog = List<TravelCity>.generate(
+      132,
+      (index) => TravelCity(
+        id: 'city-$index',
+        code: 'SIG_${(index + 1).toString().padLeft(5, '0')}',
+        name: '지역 ${index + 1}',
+        regionGroup: '테스트 권역',
+        centerLat: 36,
+        centerLng: 127,
+        sortOrder: index + 1,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myProfileProvider.overrideWith((ref) async => profile),
+          travelCitiesProvider.overrideWith((ref) async => incompleteCatalog),
+        ],
+        child: const MaterialApp(home: TravelMapPage()),
+      ),
+    );
+
+    await _pumpUntilFound(
+      tester,
+      find.text('지역 정보가 최신 상태가 아니에요.\n잠시 후 다시 시도해 주세요.'),
+    );
+
+    expect(
+      find.byKey(const ValueKey('korea-map-canvas-semantics')),
+      findsNothing,
+    );
+    expect(find.text('다시 시도'), findsOneWidget);
+  });
+
   testWidgets('공통 헤더는 뒤로가기, 제목, 세그먼트와 실제 더보기 동작을 제공한다', (tester) async {
     TravelMapSection? selectedSection;
     TravelMapMenuAction? selectedMenu;
@@ -282,6 +320,8 @@ void main() {
       ProviderScope(
         overrides: [
           myProfileProvider.overrideWith((ref) async => profile),
+          enforceDomesticTravelCatalogIntegrityProvider
+              .overrideWithValue(false),
           travelCitiesProvider.overrideWith(
             (ref) async => [
               const TravelCity(
@@ -388,6 +428,8 @@ void main() {
         overrides: [
           myProfileProvider.overrideWith((ref) async => profile),
           mapLocationServiceProvider.overrideWithValue(locationService),
+          enforceDomesticTravelCatalogIntegrityProvider
+              .overrideWithValue(false),
           travelCitiesProvider.overrideWith(
             (ref) async => [
               const TravelCity(
@@ -443,6 +485,8 @@ void main() {
         overrides: [
           myProfileProvider.overrideWith((ref) async => profile),
           mapLocationServiceProvider.overrideWithValue(locationService),
+          enforceDomesticTravelCatalogIntegrityProvider
+              .overrideWithValue(false),
           travelCitiesProvider.overrideWith(
             (ref) async => [
               const TravelCity(
@@ -594,6 +638,8 @@ void main() {
       ProviderScope(
         overrides: [
           myProfileProvider.overrideWith((ref) async => profile),
+          enforceDomesticTravelCatalogIntegrityProvider
+              .overrideWithValue(false),
           travelCitiesProvider.overrideWith(
             (ref) async => const [
               TravelCity(
