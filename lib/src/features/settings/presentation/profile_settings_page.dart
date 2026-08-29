@@ -5,6 +5,7 @@ import 'package:couple_chat_app/src/common/error_mapper.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_repository.dart';
 import 'package:couple_chat_app/src/features/settings/data/couple_prefs_providers.dart';
+import 'package:couple_chat_app/src/features/settings/data/theme_mode_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -93,6 +94,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     required String? email,
   }) {
     final displayName = _profileDisplayName(profile);
+    final themeMode = ref.watch(
+      themeModeControllerProvider.select((state) => state.mode),
+    );
 
     return ListView(
       key: const PageStorageKey<String>('more-root-scroll'),
@@ -127,6 +131,13 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
               title: '알림 설정',
               subtitle: '메시지, 기념일, 게임 알림을 관리해요.',
               onTap: () => context.push('/notifications'),
+            ),
+            _MoreTile(
+              key: const ValueKey('more-theme-mode'),
+              icon: Icons.contrast_rounded,
+              title: '화면 모드',
+              subtitle: themeModeLabel(themeMode),
+              onTap: _showThemeModeSheet,
             ),
           ],
         ),
@@ -206,6 +217,15 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
           ],
         ),
       ],
+    );
+  }
+
+  Future<void> _showThemeModeSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => const _ThemeModeSheet(),
     );
   }
 
@@ -1031,6 +1051,135 @@ class _SectionHeading extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ThemeModeSheet extends ConsumerWidget {
+  const _ThemeModeSheet();
+
+  static const _choices = <({
+    ThemeMode mode,
+    IconData icon,
+    String title,
+    String description,
+  })>[
+    (
+      mode: ThemeMode.system,
+      icon: Icons.brightness_auto_rounded,
+      title: '시스템 설정에 맞춤',
+      description: '기기의 화면 설정을 따라 자동으로 전환합니다.',
+    ),
+    (
+      mode: ThemeMode.light,
+      icon: Icons.light_mode_outlined,
+      title: '라이트',
+      description: '기기 설정과 관계없이 밝은 화면을 사용합니다.',
+    ),
+    (
+      mode: ThemeMode.dark,
+      icon: Icons.dark_mode_outlined,
+      title: '다크',
+      description: '기기 설정과 관계없이 어두운 화면을 사용합니다.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(themeModeControllerProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '화면 모드',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Dear에서 사용할 화면 밝기를 선택해 주세요.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: RadioGroup<ThemeMode>(
+                key: const ValueKey('theme-mode-radio-group'),
+                groupValue: state.mode,
+                onChanged: (mode) async {
+                  if (mode == null || state.isSaving) return;
+                  final didSave = await ref
+                      .read(themeModeControllerProvider.notifier)
+                      .selectMode(mode);
+                  if (!context.mounted || didSave) return;
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          '화면 모드를 저장하지 못했어요. 이전 설정으로 되돌렸습니다.',
+                        ),
+                      ),
+                    );
+                  ref
+                      .read(themeModeControllerProvider.notifier)
+                      .clearSaveError();
+                },
+                child: Column(
+                  children: [
+                    for (var index = 0; index < _choices.length; index++) ...[
+                      if (index > 0) const Divider(height: 1, indent: 64),
+                      RadioListTile<ThemeMode>(
+                        key: ValueKey(
+                          'theme-mode-${themeModePreferenceValue(_choices[index].mode)}',
+                        ),
+                        value: _choices[index].mode,
+                        enabled: !state.isSaving,
+                        secondary: ExcludeSemantics(
+                          child: Icon(
+                            _choices[index].icon,
+                            color: scheme.primary,
+                          ),
+                        ),
+                        title: Text(
+                          _choices[index].title,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(_choices[index].description),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (state.isSaving) ...[
+              const SizedBox(height: 14),
+              Semantics(
+                liveRegion: true,
+                label: '화면 모드 저장 중',
+                child: const LinearProgressIndicator(),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

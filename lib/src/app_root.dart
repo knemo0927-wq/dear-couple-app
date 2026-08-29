@@ -5,6 +5,7 @@ import 'package:couple_chat_app/src/common/dear_connection_banner.dart';
 import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/notifications/data/notification_route.dart';
+import 'package:couple_chat_app/src/features/settings/data/theme_mode_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -256,6 +257,9 @@ class _CoupleChatAppState extends ConsumerState<CoupleChatApp>
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(goRouterProvider);
+    final themeMode = ref.watch(
+      themeModeControllerProvider.select((state) => state.mode),
+    );
 
     ref.listen<AsyncValue<bool>>(hasSessionStateProvider, (previous, next) {
       if (next.valueOrNull == true) {
@@ -267,7 +271,7 @@ class _CoupleChatAppState extends ConsumerState<CoupleChatApp>
       title: 'Dear',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       routerConfig: router,
       builder: (context, child) => DearConnectionBanner(child: child!),
