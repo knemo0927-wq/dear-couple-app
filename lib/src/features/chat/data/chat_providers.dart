@@ -63,6 +63,9 @@ typedef ChatFetchReadMarkerAction = Future<ChatReadMarker?> Function(
 typedef ChatToggleReactionAction = Future<void> Function({
   required int messageId,
 });
+typedef ChatAddHeartReactionAction = Future<void> Function({
+  required int messageId,
+});
 typedef ChatDeleteMessageAction = Future<void> Function(int messageId);
 
 const int chatImageWarningBytes = 5 * 1024 * 1024;
@@ -304,6 +307,13 @@ final chatToggleReactionProvider = Provider<ChatToggleReactionAction>((ref) {
   final repository = ref.watch(chatRepositoryProvider);
   return ({required messageId}) =>
       repository.toggleHeartReaction(messageId: messageId);
+});
+
+final chatAddHeartReactionProvider =
+    Provider<ChatAddHeartReactionAction>((ref) {
+  final repository = ref.watch(chatRepositoryProvider);
+  return ({required messageId}) =>
+      repository.addHeartReaction(messageId: messageId);
 });
 
 final chatDeleteMessageProvider = Provider<ChatDeleteMessageAction>((ref) {

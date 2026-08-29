@@ -397,6 +397,23 @@ class ChatRepository {
     });
   }
 
+  Future<void> addHeartReaction({required int messageId}) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('AUTH_REQUIRED');
+    }
+
+    await _client.from('message_reactions').upsert(
+      {
+        'message_id': messageId,
+        'user_id': user.id,
+        'emoji': '❤️',
+      },
+      onConflict: 'message_id,user_id,emoji',
+      ignoreDuplicates: true,
+    );
+  }
+
   Future<void> deleteMessage(int messageId) async {
     final user = _client.auth.currentUser;
     if (user == null) throw const AuthException('AUTH_REQUIRED');

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:couple_chat_app/src/common/app_theme.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_providers.dart';
 import 'package:couple_chat_app/src/features/chat/data/chat_repository.dart';
+import 'package:couple_chat_app/src/features/chat/presentation/chat_image_view_page.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,6 +72,22 @@ Future<void> _pickMultiplePhotos(WidgetTester tester) async {
 
   await tester.tap(multipleChoice);
   await tester.pumpAndSettle();
+}
+
+Future<void> _doubleTap(WidgetTester tester, Finder target) async {
+  await tester.tap(target);
+  await tester.pump(const Duration(milliseconds: 50));
+  await tester.tap(target);
+  await tester.pump();
+}
+
+Set<String?> _customActionLabels(SemanticsNode node) {
+  final ids = node.getSemanticsData().customSemanticsActionIds ?? const <int>[];
+  return ids
+      .map(CustomSemanticsAction.getAction)
+      .whereType<CustomSemanticsAction>()
+      .map((action) => action.label)
+      .toSet();
 }
 
 void main() {
@@ -641,7 +658,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('44pt 더보기와 길게 누르기는 같은 메시지 작업 메뉴를 제공한다', (tester) async {
+  testWidgets('시각적 더보기 없이 long-press와 접근성 작업으로 메시지 메뉴를 연다', (tester) async {
     final message = ChatMessage(
       id: 42,
       coupleId: '11111111-1111-4111-8111-111111111111',
@@ -670,18 +687,26 @@ void main() {
     await tester.pumpAndSettle();
     final semantics = tester.ensureSemantics();
 
-    final actionsButton = find.byKey(
-      const ValueKey<String>('message-actions-42'),
+    expect(
+      find.byKey(const ValueKey<String>('message-actions-42')),
+      findsNothing,
     );
-    expect(actionsButton, findsOneWidget);
-    expect(tester.getSize(actionsButton).width, greaterThanOrEqualTo(44));
-    expect(tester.getSize(actionsButton).height, greaterThanOrEqualTo(44));
     expect(
       find.bySemanticsLabel(RegExp(r'^하트 반응')),
       findsNothing,
     );
+    final messageSemantics = tester.getSemantics(
+      find.byKey(const ValueKey<String>('chat-message-semantics-42')),
+    );
+    expect(
+      _customActionLabels(messageSemantics),
+      containsAll(<String>['메시지 작업 열기', '하트 남기기']),
+    );
 
-    await tester.tap(actionsButton);
+    tester.semantics.customAction(
+      find.semantics.byLabel('내 메시지, 기억해 줘'),
+      const CustomSemanticsAction(label: '메시지 작업 열기'),
+    );
     await tester.pumpAndSettle();
     expect(find.text('하트 남기기'), findsOneWidget);
     expect(find.text('답장'), findsOneWidget);
@@ -701,7 +726,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('하트 반응은 개수와 선택 상태를 읽고 작업 메뉴에서 취소할 수 있다', (tester) async {
+  testWidgets('하트 반응은 개수와 선택 상태를 읽고 길게 눌러 취소할 수 있다', (tester) async {
     int? toggledMessageId;
     final message = ChatMessage(
       id: 43,
@@ -757,12 +782,216 @@ void main() {
     await tester.pump();
     expect(toggledMessageId, 43);
 
-    await tester.tap(
+    expect(
       find.byKey(const ValueKey<String>('message-actions-43')),
+      findsNothing,
     );
+    await tester.longPress(find.text('좋아해'));
     await tester.pumpAndSettle();
     expect(find.text('하트 취소'), findsOneWidget);
     semantics.dispose();
+  });
+
+  testWidgets('더블탭은 하트를 즉시 추가하고 완료 전 빠른 중복 요청을 막는다', (tester) async {
+    final completer = Completer<void>();
+    var addCount = 0;
+    int? addedMessageId;
+    final message = ChatMessage(
+      id: 44,
+      coupleId: coupleId,
+      senderId: 'user-1',
+      body: '더블탭해 줘',
+      imagePath: null,
+      createdAt: DateTime(2026, 7, 12, 9),
+      heartCount: 0,
+      isHeartedByMe: false,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatWatchMessagesProvider.overrideWithValue(
+            (_) => Stream<List<ChatMessage>>.value([message]),
+          ),
+          chatCurrentUserIdProvider.overrideWithValue('user-1'),
+          chatAddHeartReactionProvider.overrideWithValue(({
+            required int messageId,
+          }) async {
+            addCount++;
+            addedMessageId = messageId;
+            await completer.future;
+          }),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: ChatPage(coupleId: coupleId)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final semantics = tester.ensureSemantics();
+
+    final bubble = find.byKey(
+      const ValueKey<String>('chat-message-bubble-44'),
+    );
+    await _doubleTap(tester, bubble);
+
+    expect(addCount, 1);
+    expect(addedMessageId, 44);
+    expect(
+      find.byKey(const ValueKey<String>('message-heart-44')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(const ValueKey<String>('message-heart-44')),
+          )
+          .label,
+      contains('하트 반응 1개'),
+    );
+
+    await _doubleTap(tester, bubble);
+    expect(addCount, 1);
+
+    completer.complete();
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    semantics.dispose();
+  });
+
+  testWidgets('이미 좋아요한 메시지의 더블탭은 하트를 제거하지 않는다', (tester) async {
+    var addCount = 0;
+    var toggleCount = 0;
+    final message = ChatMessage(
+      id: 45,
+      coupleId: coupleId,
+      senderId: 'user-2',
+      body: '이미 좋아요',
+      imagePath: null,
+      createdAt: DateTime(2026, 7, 12, 9),
+      heartCount: 1,
+      isHeartedByMe: true,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatWatchMessagesProvider.overrideWithValue(
+            (_) => Stream<List<ChatMessage>>.value([message]),
+          ),
+          chatCurrentUserIdProvider.overrideWithValue('user-1'),
+          chatAddHeartReactionProvider.overrideWithValue(({
+            required int messageId,
+          }) async {
+            addCount++;
+          }),
+          chatToggleReactionProvider.overrideWithValue(({
+            required int messageId,
+          }) async {
+            toggleCount++;
+          }),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: ChatPage(coupleId: coupleId)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final semantics = tester.ensureSemantics();
+
+    await _doubleTap(
+      tester,
+      find.byKey(const ValueKey<String>('chat-message-bubble-45')),
+    );
+    expect(addCount, 0);
+    expect(toggleCount, 0);
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(const ValueKey<String>('message-heart-45')),
+          )
+          .label,
+      contains('하트 반응 1개'),
+    );
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    semantics.dispose();
+  });
+
+  testWidgets('320pt·200% 글자에서 수신 하트는 오른쪽, 발신 하트는 왼쪽에 배치된다', (tester) async {
+    tester.view.physicalSize = const Size(320, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final messages = [
+      ChatMessage(
+        id: 46,
+        coupleId: coupleId,
+        senderId: 'user-2',
+        body: '상대방이 보낸 긴 메시지의 배치를 확인해요',
+        imagePath: null,
+        createdAt: DateTime(2026, 7, 12, 9),
+        heartCount: 1,
+        isHeartedByMe: false,
+      ),
+      ChatMessage(
+        id: 47,
+        coupleId: coupleId,
+        senderId: 'user-1',
+        body: '내가 보낸 긴 메시지의 배치도 확인해요',
+        imagePath: null,
+        createdAt: DateTime(2026, 7, 12, 9, 1),
+        heartCount: 1,
+        isHeartedByMe: false,
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatWatchMessagesProvider.overrideWithValue(
+            (_) => Stream<List<ChatMessage>>.value(messages),
+          ),
+          chatCurrentUserIdProvider.overrideWithValue('user-1'),
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: ChatPage(coupleId: coupleId)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final incomingBubble = tester.getRect(
+      find.byKey(const ValueKey<String>('chat-message-bubble-46')),
+    );
+    final incomingHeart = tester.getRect(
+      find.byKey(const ValueKey<String>('message-heart-46')),
+    );
+    final outgoingBubble = tester.getRect(
+      find.byKey(const ValueKey<String>('chat-message-bubble-47')),
+    );
+    final outgoingHeart = tester.getRect(
+      find.byKey(const ValueKey<String>('message-heart-47')),
+    );
+
+    expect(incomingHeart.left, greaterThanOrEqualTo(incomingBubble.right + 4));
+    expect(outgoingHeart.right, lessThanOrEqualTo(outgoingBubble.left - 4));
+    expect(incomingHeart.height, greaterThanOrEqualTo(44));
+    expect(outgoingHeart.height, greaterThanOrEqualTo(44));
+    expect(incomingHeart.bottom, closeTo(incomingBubble.bottom, 0.1));
+    expect(outgoingHeart.bottom, closeTo(outgoingBubble.bottom, 0.1));
+    expect(incomingHeart.right, lessThanOrEqualTo(320));
+    expect(outgoingBubble.right, lessThanOrEqualTo(320));
+    expect(tester.takeException(), isNull);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
   });
 
   testWidgets('같은 사진을 여러 번 고르면 큐에 한 번만 추가한다', (tester) async {
@@ -1013,7 +1242,9 @@ void main() {
     }
   });
 
-  testWidgets('같은 분에 연속된 다중 이미지를 2열 모자이크 한 묶음으로 표시한다', (tester) async {
+  testWidgets('다중 이미지는 모자이크로 보이고 tap·double-tap·long-press를 구분한다',
+      (tester) async {
+    int? addedMessageId;
     final messages = [
       for (var id = 1; id <= 3; id++)
         ChatMessage(
@@ -1037,6 +1268,11 @@ void main() {
           chatResolveImageUrlProvider.overrideWithValue(
             (path) async => 'https://example.invalid/$path',
           ),
+          chatAddHeartReactionProvider.overrideWithValue(({
+            required int messageId,
+          }) async {
+            addedMessageId = messageId;
+          }),
         ],
         child: const MaterialApp(
           home: Scaffold(body: ChatPage(coupleId: coupleId)),
@@ -1062,6 +1298,34 @@ void main() {
         isTrue,
       );
     }
+
+    final firstImage = find.byKey(const ValueKey<String>('chat-image-open-1'));
+    await _doubleTap(tester, firstImage);
+    expect(addedMessageId, 3);
+    expect(
+      find.byKey(const ValueKey<String>('message-heart-3')),
+      findsOneWidget,
+    );
+    expect(
+      _customActionLabels(tester.getSemantics(firstImage)),
+      isNot(contains('하트 남기기')),
+    );
+
+    await tester.longPress(firstImage);
+    await tester.pumpAndSettle();
+    expect(find.text('답장'), findsOneWidget);
+    expect(find.text('삭제'), findsOneWidget);
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.tap(firstImage);
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(ChatImageViewPage), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 80));
     }

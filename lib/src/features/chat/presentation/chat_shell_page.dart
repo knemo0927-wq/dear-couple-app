@@ -315,28 +315,40 @@ class _ChatHeaderAvatar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return ExcludeSemantics(
       child: Stack(
+        key: const ValueKey('chat-header-avatar'),
         clipBehavior: Clip.none,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              shape: BoxShape.circle,
-              // A white ring deliberately separates a photo from the app bar.
-              border: Border.all(color: Colors.white, width: 3),
+          SizedBox.square(
+            key: const ValueKey('chat-header-avatar-frame'),
+            dimension: 48,
+            child: ClipOval(
+              key: const ValueKey('chat-header-avatar-clip'),
+              child: ColoredBox(
+                color: scheme.primaryContainer,
+                child: url == null || url.isEmpty
+                    ? Icon(Icons.person_rounded, color: scheme.primary)
+                    : Image.network(
+                        key: const ValueKey('chat-header-avatar-image'),
+                        url,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                        cacheWidth: math.max(
+                          1,
+                          (48 * MediaQuery.devicePixelRatioOf(context)).round(),
+                        ),
+                        cacheHeight: math.max(
+                          1,
+                          (48 * MediaQuery.devicePixelRatioOf(context)).round(),
+                        ),
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.person_rounded,
+                          color: scheme.primary,
+                        ),
+                      ),
+              ),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: url == null || url.isEmpty
-                ? Icon(Icons.person_rounded, color: scheme.primary)
-                : Image.network(
-                    url,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Icon(
-                      Icons.person_rounded,
-                      color: scheme.primary,
-                    ),
-                  ),
           ),
           Positioned(
             right: -2,

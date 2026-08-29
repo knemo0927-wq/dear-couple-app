@@ -138,6 +138,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('상대 프로필 사진은 내부 여백 없이 48pt 원형 프레임을 채운다', (tester) async {
+    await _pumpChatShell(
+      tester,
+      width: 375,
+      textScale: 1,
+      partnerName: partnerName,
+      avatarUrl: 'https://example.test/partner-avatar.jpg',
+    );
+
+    final frame = find.byKey(
+      const ValueKey('chat-header-avatar-frame'),
+    );
+    final clip = find.byKey(
+      const ValueKey('chat-header-avatar-clip'),
+    );
+    final imageFinder = find.byKey(
+      const ValueKey('chat-header-avatar-image'),
+    );
+    final image = tester.widget<Image>(imageFinder);
+
+    expect(tester.getSize(frame), const Size.square(48));
+    expect(tester.getSize(clip), const Size.square(48));
+    expect(tester.getSize(imageFinder), const Size.square(48));
+    expect(image.width, 48);
+    expect(image.height, 48);
+    expect(image.fit, BoxFit.cover);
+    expect(image.alignment, Alignment.center);
+    expect(
+      find.descendant(of: clip, matching: find.byType(Padding)),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('다크 채팅 셸은 헤더 텍스트·pill·제어에 dark color scheme을 사용한다',
       (tester) async {
     final theme = AppTheme.dark();
@@ -183,6 +217,7 @@ Future<void> _pumpChatShell(
   required double textScale,
   required String partnerName,
   ThemeData? theme,
+  String? avatarUrl,
 }) async {
   // Keep vertical room for ChatPage's separately tested composer; this suite
   // targets the shell header at compact iPhone widths.
@@ -208,7 +243,11 @@ Future<void> _pumpChatShell(
           ),
         ),
         coupleAvatarUrlMapProvider.overrideWith(
-          (ref, id) => Stream.value(const <String, String>{}),
+          (ref, id) => Stream.value(
+            avatarUrl == null
+                ? const <String, String>{}
+                : <String, String>{'user-2': avatarUrl},
+          ),
         ),
         anniversaryDateProvider.overrideWith(
           (ref) => Stream.value(relationshipStart),

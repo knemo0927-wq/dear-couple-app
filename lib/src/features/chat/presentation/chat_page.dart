@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:couple_chat_app/src/common/error_mapper.dart';
 import 'package:couple_chat_app/src/common/dear_design.dart';
@@ -8,6 +9,7 @@ import 'package:couple_chat_app/src/features/chat/data/chat_repository.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_format.dart';
 import 'package:couple_chat_app/src/features/chat/presentation/chat_image_view_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -52,6 +54,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
   bool _didInitialAutoScroll = false;
   bool _keyboardWasVisible = false;
   StreamSubscription<int>? _reactionSubscription;
+  final Set<int> _addingHeartMessageIds = <int>{};
+  final Set<int> _optimisticHeartMessageIds = <int>{};
   int _streamRevision = 0;
 
   ChatWatchMessages get _watchMessages => ref.read(chatWatchMessagesProvider);
@@ -63,6 +67,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
       ref.read(chatFetchMessagesPageProvider);
   ChatToggleReactionAction get _toggleReactionAction =>
       ref.read(chatToggleReactionProvider);
+  ChatAddHeartReactionAction get _addHeartReactionAction =>
+      ref.read(chatAddHeartReactionProvider);
   ChatPickImageAction get _pickImageAction => ref.read(chatPickImageProvider);
   ChatPickImagesAction get _pickImagesAction =>
       ref.read(chatPickImagesProvider);
@@ -282,6 +288,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
       await _toggleReactionAction(messageId: messageId);
       if (!mounted) return;
       setState(() {
+        _optimisticHeartMessageIds.remove(messageId);
         _error = null;
         _retryAction = null;
       });
@@ -289,9 +296,64 @@ class _ChatPageState extends ConsumerState<ChatPage>
       if (!mounted) return;
       setState(() {
         _error = toFriendlyErrorMessage(e);
+        _retryIsImage = false;
         _retryAction = () => _toggleReactionAction(messageId: messageId);
       });
     }
+  }
+
+  Future<void> _addMessageHeart(ChatMessage message) async {
+    final messageId = message.id;
+    if (message.isHeartedByMe ||
+        _optimisticHeartMessageIds.contains(messageId) ||
+        _addingHeartMessageIds.contains(messageId)) {
+      return;
+    }
+
+    unawaited(HapticFeedback.selectionClick());
+    setState(() {
+      _addingHeartMessageIds.add(messageId);
+      _optimisticHeartMessageIds.add(messageId);
+      _error = null;
+      _retryAction = null;
+    });
+
+    try {
+      await _addHeartReactionAction(messageId: messageId);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _optimisticHeartMessageIds.remove(messageId);
+        _error = toFriendlyErrorMessage(error);
+        _retryIsImage = false;
+        _retryAction = () async {
+          await _addHeartReactionAction(messageId: messageId);
+          if (!mounted) return;
+          setState(() => _optimisticHeartMessageIds.add(messageId));
+        };
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _addingHeartMessageIds.remove(messageId));
+      }
+    }
+  }
+
+  void _reconcileOptimisticHearts(List<ChatMessage> messages) {
+    final confirmedIds = messages
+        .where(
+          (message) =>
+              message.isHeartedByMe &&
+              _optimisticHeartMessageIds.contains(message.id),
+        )
+        .map((message) => message.id)
+        .toSet();
+    if (confirmedIds.isEmpty) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _optimisticHeartMessageIds.removeAll(confirmedIds));
+    });
   }
 
   Future<void> _showMessageActions(
@@ -886,6 +948,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                     return date != 0 ? date : a.id.compareTo(b.id);
                   });
                 _lastVisibleMessages = messages;
+                _reconcileOptimisticHearts(messages);
                 if (_olderMessages.isEmpty &&
                     liveMessages.length < ChatRepository.initialPageSize) {
                   _hasMoreOlder = false;
@@ -988,6 +1051,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
                     final entry = entries[entryIndex];
                     final message = entry.first;
                     final lastMessage = entry.last;
+                    final isOptimisticallyHearted =
+                        _optimisticHeartMessageIds.contains(lastMessage.id) &&
+                            !lastMessage.isHeartedByMe;
+                    final displayedHeartCount = lastMessage.heartCount +
+                        (isOptimisticallyHearted ? 1 : 0);
+                    final displayedHeartedByMe =
+                        lastMessage.isHeartedByMe || isOptimisticallyHearted;
                     final previous =
                         entryIndex > 0 ? entries[entryIndex - 1].last : null;
                     final next = entryIndex + 1 < entries.length
@@ -1064,10 +1134,14 @@ class _ChatPageState extends ConsumerState<ChatPage>
                                                 lastMessage.id <=
                                                     partnerLastReadMessageId,
                                         showMessageTime: showMessageTime,
+                                        heartCount: displayedHeartCount,
+                                        isHeartedByMe: displayedHeartedByMe,
                                         onLongPress: () => _showMessageActions(
                                           lastMessage,
                                           isMine: true,
                                         ),
+                                        onAddHeart: () =>
+                                            _addMessageHeart(lastMessage),
                                         onToggleHeart: () =>
                                             _toggleMessageReaction(
                                           lastMessage.id,
@@ -1107,10 +1181,14 @@ class _ChatPageState extends ConsumerState<ChatPage>
                                     isMine: false,
                                     isReadByPartner: false,
                                     showMessageTime: showMessageTime,
+                                    heartCount: displayedHeartCount,
+                                    isHeartedByMe: displayedHeartedByMe,
                                     onLongPress: () => _showMessageActions(
                                       lastMessage,
                                       isMine: false,
                                     ),
+                                    onAddHeart: () =>
+                                        _addMessageHeart(lastMessage),
                                     onToggleHeart: () =>
                                         _toggleMessageReaction(lastMessage.id),
                                   ),
@@ -1785,7 +1863,10 @@ class _ChatBubbleContent extends StatelessWidget {
     required this.isMine,
     required this.isReadByPartner,
     required this.showMessageTime,
+    required this.heartCount,
+    required this.isHeartedByMe,
     required this.onLongPress,
+    required this.onAddHeart,
     required this.onToggleHeart,
   });
 
@@ -1795,129 +1876,215 @@ class _ChatBubbleContent extends StatelessWidget {
   final bool isMine;
   final bool isReadByPartner;
   final bool showMessageTime;
+  final int heartCount;
+  final bool isHeartedByMe;
   final VoidCallback onLongPress;
+  final VoidCallback onAddHeart;
   final VoidCallback onToggleHeart;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onLongPress: onLongPress,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          if (message.hasText)
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.sizeOf(context).width * 0.72,
-              ),
-              child: DecoratedBox(
-                key: ValueKey<String>('chat-message-bubble-${message.id}'),
-                decoration: BoxDecoration(
-                  gradient: isMine
-                      ? LinearGradient(
-                          colors: [
-                            scheme.primaryContainer,
-                            scheme.secondaryContainer,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : null,
-                  color: isMine ? null : scheme.surface,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(20),
-                    topRight: const Radius.circular(20),
-                    bottomLeft: Radius.circular(isMine ? 20 : 6),
-                    bottomRight: Radius.circular(isMine ? 6 : 20),
-                  ),
-                  border: Border.all(
-                    color: scheme.outlineVariant,
-                    width: 0.7,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 14,
-                      offset: const Offset(0, 3),
-                      color: scheme.shadow.withValues(alpha: 0.06),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 10,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (message.replyToMessageId != null) ...[
-                        _ReplyPreview(
-                          text: replyMessage == null
-                              ? '답장한 메시지'
-                              : (replyMessage!.hasText
-                                  ? replyMessage!.body!.trim()
-                                  : '사진'),
-                        ),
-                        const SizedBox(height: 7),
-                      ],
-                      Text(
+    final side = isMine ? '내' : '상대방';
+    final contentLabel =
+        message.hasText ? '$side 메시지, ${message.body!.trim()}' : '$side 사진 메시지';
+    final customActions = <CustomSemanticsAction, VoidCallback>{
+      const CustomSemanticsAction(label: '메시지 작업 열기'): onLongPress,
+      if (!isHeartedByMe)
+        const CustomSemanticsAction(label: '하트 남기기'): onAddHeart,
+    };
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        final reactionSlotWidth = heartCount > 0
+            ? DearTouchTargets.minimum + DearSpacing.space4
+            : 0.0;
+        final boundedWidth =
+            constraints.hasBoundedWidth ? constraints.maxWidth : screenWidth;
+        final availableContentWidth =
+            math.max(0.0, boundedWidth - reactionSlotWidth);
+        final textMaxWidth =
+            math.min(screenWidth * 0.72, availableContentWidth);
+        final mosaicMaxWidth =
+            math.min(screenWidth * 0.68, availableContentWidth);
+        final imageMaxWidth =
+            math.min(screenWidth * 0.62, availableContentWidth);
+
+        final messageSurface = ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: availableContentWidth),
+          child: Semantics(
+            key: ValueKey<String>('chat-message-semantics-${message.id}'),
+            container: true,
+            label: contentLabel,
+            hint: isHeartedByMe
+                ? '길게 눌러 메시지 작업 열기'
+                : '두 번 탭하여 하트 남기기. 길게 눌러 메시지 작업 열기',
+            onTap: !message.hasImage && !isHeartedByMe ? onAddHeart : null,
+            onLongPress: onLongPress,
+            customSemanticsActions: customActions,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment:
+                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                if (message.hasText)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: textMaxWidth),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onDoubleTap: onAddHeart,
+                      onLongPress: onLongPress,
+                      child: DecoratedBox(
                         key: ValueKey<String>(
-                          'chat-message-body-${message.id}',
+                          'chat-message-bubble-${message.id}',
                         ),
-                        message.body!,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: isMine
-                                  ? scheme.onPrimaryContainer
-                                  : scheme.onSurface,
-                              height: 1.35,
+                        decoration: BoxDecoration(
+                          gradient: isMine
+                              ? LinearGradient(
+                                  colors: [
+                                    scheme.primaryContainer,
+                                    scheme.secondaryContainer,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : null,
+                          color: isMine ? null : scheme.surface,
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(20),
+                            topRight: const Radius.circular(20),
+                            bottomLeft: Radius.circular(isMine ? 20 : 6),
+                            bottomRight: Radius.circular(isMine ? 6 : 20),
+                          ),
+                          border: Border.all(
+                            color: scheme.outlineVariant,
+                            width: 0.7,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              blurRadius: 14,
+                              offset: const Offset(0, 3),
+                              color: scheme.shadow.withValues(alpha: 0.06),
                             ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 13,
+                            vertical: 10,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (message.replyToMessageId != null) ...[
+                                _ReplyPreview(
+                                  text: replyMessage == null
+                                      ? '답장한 메시지'
+                                      : (replyMessage!.hasText
+                                          ? replyMessage!.body!.trim()
+                                          : '사진'),
+                                ),
+                                const SizedBox(height: 7),
+                              ],
+                              Text(
+                                key: ValueKey<String>(
+                                  'chat-message-body-${message.id}',
+                                ),
+                                message.body!,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyLarge
+                                    ?.copyWith(
+                                      color: isMine
+                                          ? scheme.onPrimaryContainer
+                                          : scheme.onSurface,
+                                      height: 1.35,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                if (imageMessages.length > 1)
+                  Padding(
+                    padding: EdgeInsets.only(top: message.hasText ? 6 : 0),
+                    child: _MessageImageMosaic(
+                      messages: imageMessages,
+                      maxWidth: mosaicMaxWidth,
+                      canAddHeart: !isHeartedByMe,
+                      onDoubleTap: onAddHeart,
+                      onLongPress: onLongPress,
+                    ),
+                  )
+                else if (message.hasImage)
+                  Padding(
+                    padding: EdgeInsets.only(top: message.hasText ? 6 : 0),
+                    child: _MessageImage(
+                      imagePath: message.imagePath!,
+                      messageId: message.id,
+                      maxWidth: imageMaxWidth,
+                      canAddHeart: !isHeartedByMe,
+                      onDoubleTap: onAddHeart,
+                      onLongPress: onLongPress,
+                    ),
+                  ),
+              ],
             ),
-          if (imageMessages.length > 1)
-            Padding(
-              padding: EdgeInsets.only(top: message.hasText ? 6 : 0),
-              child: _MessageImageMosaic(
-                messages: imageMessages,
-                isMine: isMine,
-                showTimeLabel: showMessageTime,
-                maxWidth: MediaQuery.sizeOf(context).width * 0.68,
-              ),
-            )
-          else if (message.hasImage)
-            Padding(
-              padding: EdgeInsets.only(
-                top: message.hasText ? 6 : 0,
-              ),
-              child: _MessageImage(
-                imagePath: message.imagePath!,
-                messageId: message.id,
-                sentAt: message.createdAt,
-                isMine: isMine,
-                showTimeLabel: showMessageTime,
-                maxWidth: MediaQuery.sizeOf(context).width * 0.62,
-              ),
-            ),
-          const SizedBox(height: 4),
-          _MessageMetaRow(
-            messageId: imageMessages.last.id,
-            isMine: isMine,
-            deliveryLabel: isMine ? (isReadByPartner ? '읽음' : '전송됨') : null,
-            showTimeLabel: !message.hasImage && showMessageTime,
-            timeLabel: chatTimeLabel(imageMessages.last.createdAt),
-            heartCount: imageMessages.last.heartCount,
-            isHeartedByMe: imageMessages.last.isHeartedByMe,
-            onToggleHeart: onToggleHeart,
-            onShowActions: onLongPress,
           ),
-        ],
-      ),
+        );
+        final heart = heartCount <= 0
+            ? null
+            : _HeartReactionButton(
+                key: ValueKey<String>(
+                  'message-heart-${imageMessages.last.id}',
+                ),
+                count: heartCount,
+                isActive: isHeartedByMe,
+                onTap: onToggleHeart,
+              );
+
+        return Column(
+          crossAxisAlignment:
+              isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Row(
+              key: ValueKey<String>(
+                'chat-message-layout-${imageMessages.last.id}',
+              ),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: isMine
+                  ? [
+                      if (heart != null) ...[
+                        heart,
+                        const SizedBox(width: DearSpacing.space4),
+                      ],
+                      messageSurface,
+                    ]
+                  : [
+                      messageSurface,
+                      if (heart != null) ...[
+                        const SizedBox(width: DearSpacing.space4),
+                        heart,
+                      ],
+                    ],
+            ),
+            if (isMine || showMessageTime) ...[
+              const SizedBox(height: DearSpacing.space4),
+              _MessageMetaRow(
+                messageId: imageMessages.last.id,
+                isMine: isMine,
+                deliveryLabel: isMine ? (isReadByPartner ? '읽음' : '전송됨') : null,
+                showTimeLabel: showMessageTime,
+                timeLabel: chatTimeLabel(imageMessages.last.createdAt),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -2059,10 +2226,6 @@ class _MessageMetaRow extends StatelessWidget {
     required this.deliveryLabel,
     required this.showTimeLabel,
     required this.timeLabel,
-    required this.heartCount,
-    required this.isHeartedByMe,
-    required this.onToggleHeart,
-    required this.onShowActions,
   });
 
   final int messageId;
@@ -2070,10 +2233,6 @@ class _MessageMetaRow extends StatelessWidget {
   final String? deliveryLabel;
   final bool showTimeLabel;
   final String timeLabel;
-  final int heartCount;
-  final bool isHeartedByMe;
-  final VoidCallback onToggleHeart;
-  final VoidCallback onShowActions;
 
   @override
   Widget build(BuildContext context) {
@@ -2087,13 +2246,6 @@ class _MessageMetaRow extends StatelessWidget {
           ),
     );
 
-    final heart = heartCount <= 0
-        ? null
-        : _HeartReactionButton(
-            count: heartCount,
-            isActive: isHeartedByMe,
-            onTap: onToggleHeart,
-          );
     final delivery = deliveryLabel == null
         ? null
         : Text(
@@ -2110,52 +2262,16 @@ class _MessageMetaRow extends StatelessWidget {
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Padding(
         padding: EdgeInsets.only(right: isMine ? 2 : 0, left: isMine ? 0 : 2),
-        child: Wrap(
-          alignment: isMine ? WrapAlignment.end : WrapAlignment.start,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: isMine
-              ? [
-                  if (delivery != null) delivery,
-                  if (showTimeLabel) time,
-                  if (heart != null) heart,
-                  _MessageActionsButton(
-                    messageId: messageId,
-                    onPressed: onShowActions,
-                  ),
-                ]
-              : [
-                  if (heart != null) heart,
-                  if (showTimeLabel) time,
-                  _MessageActionsButton(
-                    messageId: messageId,
-                    onPressed: onShowActions,
-                  ),
-                ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (delivery != null) delivery,
+            if (delivery != null && showTimeLabel)
+              const SizedBox(width: DearSpacing.space8),
+            if (showTimeLabel) time,
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _MessageActionsButton extends StatelessWidget {
-  const _MessageActionsButton({
-    required this.messageId,
-    required this.onPressed,
-  });
-
-  final int messageId;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return DearIconButton(
-      key: ValueKey<String>('message-actions-$messageId'),
-      tooltip: '메시지 작업 더보기',
-      onPressed: onPressed,
-      icon: const Icon(Icons.more_horiz_rounded),
-      iconSize: DearIconSizes.small,
     );
   }
 }
@@ -2165,6 +2281,7 @@ class _HeartReactionButton extends StatefulWidget {
     required this.count,
     required this.isActive,
     required this.onTap,
+    super.key,
   });
 
   final int count;
@@ -2184,7 +2301,7 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
     final scheme = Theme.of(context).colorScheme;
     final activeColor = scheme.primary;
     const iconSize = 15.0;
-    const horizontalPadding = 7.0;
+    const horizontalPadding = 5.0;
     const verticalPadding = 3.0;
 
     final actionLabel = widget.isActive ? '하트 취소' : '하트 남기기';
@@ -2216,8 +2333,8 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
             HapticFeedback.selectionClick();
             widget.onTap();
           },
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: SizedBox.square(
+            dimension: DearTouchTargets.minimum,
             child: Center(
               child: AnimatedScale(
                 duration: DearMotion.duration(context, DearMotion.fast),
@@ -2256,17 +2373,22 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
                       ),
                       if (widget.count > 0) ...[
                         const SizedBox(width: 3),
-                        Text(
-                          '${widget.count}',
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: widget.isActive
-                                        ? activeColor
-                                        : scheme.onSurfaceVariant,
-                                    fontWeight: widget.isActive
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                  ),
+                        MediaQuery.withClampedTextScaling(
+                          maxScaleFactor: 1.3,
+                          child: Text(
+                            '${widget.count}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: widget.isActive
+                                      ? activeColor
+                                      : scheme.onSurfaceVariant,
+                                  fontWeight: widget.isActive
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                          ),
                         ),
                       ],
                     ],
@@ -2284,56 +2406,41 @@ class _HeartReactionButtonState extends State<_HeartReactionButton> {
 class _MessageImageMosaic extends StatelessWidget {
   const _MessageImageMosaic({
     required this.messages,
-    required this.isMine,
-    required this.showTimeLabel,
     required this.maxWidth,
+    required this.canAddHeart,
+    required this.onDoubleTap,
+    required this.onLongPress,
   });
 
   final List<ChatMessage> messages;
-  final bool isMine;
-  final bool showTimeLabel;
   final double maxWidth;
+  final bool canAddHeart;
+  final VoidCallback onDoubleTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final tileWidth = (maxWidth - 4) / 2;
     return Semantics(
       label: '사진 ${messages.length}장 묶음',
-      child: Column(
+      child: SizedBox(
         key: ValueKey<String>('chat-image-mosaic-${messages.first.id}'),
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: maxWidth,
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                for (final message in messages)
-                  _MessageImage(
-                    imagePath: message.imagePath!,
-                    messageId: message.id,
-                    sentAt: message.createdAt,
-                    isMine: isMine,
-                    showTimeLabel: false,
-                    maxWidth: tileWidth,
-                  ),
-              ],
-            ),
-          ),
-          if (showTimeLabel)
-            Padding(
-              padding: const EdgeInsets.only(top: 4, right: 2),
-              child: Text(
-                chatTimeLabel(messages.last.createdAt),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: isMine ? FontWeight.w600 : FontWeight.w500,
-                    ),
+        width: maxWidth,
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            for (final message in messages)
+              _MessageImage(
+                imagePath: message.imagePath!,
+                messageId: message.id,
+                maxWidth: tileWidth,
+                canAddHeart: canAddHeart,
+                onDoubleTap: onDoubleTap,
+                onLongPress: onLongPress,
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2343,18 +2450,18 @@ class _MessageImage extends ConsumerStatefulWidget {
   const _MessageImage({
     required this.imagePath,
     required this.messageId,
-    required this.sentAt,
-    required this.isMine,
-    required this.showTimeLabel,
     required this.maxWidth,
+    required this.canAddHeart,
+    required this.onDoubleTap,
+    required this.onLongPress,
   });
 
   final String imagePath;
   final int messageId;
-  final DateTime sentAt;
-  final bool isMine;
-  final bool showTimeLabel;
   final double maxWidth;
+  final bool canAddHeart;
+  final VoidCallback onDoubleTap;
+  final VoidCallback onLongPress;
 
   @override
   ConsumerState<_MessageImage> createState() => _MessageImageState();
@@ -2440,37 +2547,25 @@ class _MessageImageState extends ConsumerState<_MessageImage> {
           enabled: imageUrl != null,
           label: imageUrl == null ? '사진 불러오는 중' : '사진 크게 보기',
           onTap: openImage,
+          onLongPress: widget.onLongPress,
+          customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+            if (widget.canAddHeart)
+              const CustomSemanticsAction(label: '하트 남기기'): widget.onDoubleTap,
+            const CustomSemanticsAction(label: '메시지 작업 열기'): widget.onLongPress,
+          },
           excludeSemantics: true,
           child: GestureDetector(
             onTap: openImage,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Hero(
-                  tag: heroTag,
-                  child: _StableNetworkImageFrame(
-                    imageUrl: imageUrl,
-                    width: widget.maxWidth,
-                    height: widget.maxWidth * 0.74,
-                    borderRadius: 12,
-                  ),
-                ),
-                if (widget.showTimeLabel)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4, right: 2),
-                    child: Text(
-                      chatTimeLabel(widget.sentAt),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontWeight: widget.isMine
-                                ? FontWeight.w600
-                                : FontWeight.w500,
-                          ),
-                    ),
-                  ),
-              ],
+            onDoubleTap: widget.onDoubleTap,
+            onLongPress: widget.onLongPress,
+            child: Hero(
+              tag: heroTag,
+              child: _StableNetworkImageFrame(
+                imageUrl: imageUrl,
+                width: widget.maxWidth,
+                height: widget.maxWidth * 0.74,
+                borderRadius: 12,
+              ),
             ),
           ),
         );
