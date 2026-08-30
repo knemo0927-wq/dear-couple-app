@@ -72,8 +72,17 @@ String toFriendlyErrorMessage(Object error) {
       raw, const ['JWT', 'token is expired', 'session_not_found'])) {
     return '로그인 세션이 만료됐어요. 다시 로그인해 주세요.';
   }
+  if (_containsAny(raw, const [
+    'PGRST202',
+    'PGRST204',
+    'PGRST205',
+    '42703',
+    '42P01',
+  ])) {
+    return '서버 기능 업데이트가 필요해요. 잠시 후 다시 시도해 주세요.';
+  }
   if (_containsAny(raw, const ['PostgrestException', 'PGRST'])) {
-    return '서버 요청 처리에 실패했어요. 네트워크 상태를 확인하고 다시 시도해 주세요.';
+    return '서버 요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
 
   return '요청 처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.';

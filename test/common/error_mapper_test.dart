@@ -17,6 +17,35 @@ void main() {
     );
   });
 
+  test('누락된 DB 테이블은 네트워크가 아닌 서버 업데이트로 안내한다', () {
+    expect(
+      toFriendlyErrorMessage(
+        'PostgrestException(message: table not found, code: PGRST205)',
+      ),
+      '서버 기능 업데이트가 필요해요. 잠시 후 다시 시도해 주세요.',
+    );
+  });
+
+  test('누락된 RPC와 컬럼도 서버 업데이트로 안내한다', () {
+    for (final code in const ['PGRST202', 'PGRST204', '42703', '42P01']) {
+      expect(
+        toFriendlyErrorMessage(
+          'PostgrestException(message: schema contract missing, code: $code)',
+        ),
+        '서버 기능 업데이트가 필요해요. 잠시 후 다시 시도해 주세요.',
+      );
+    }
+  });
+
+  test('기타 PostgREST 오류는 네트워크를 탓하지 않는다', () {
+    expect(
+      toFriendlyErrorMessage(
+        'PostgrestException(message: invalid request, code: PGRST100)',
+      ),
+      '서버 요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    );
+  });
+
   test('알 수 없는 에러는 기본 메시지로 변환한다', () {
     expect(
       toFriendlyErrorMessage('Random unknown error'),
