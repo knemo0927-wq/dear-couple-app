@@ -1,4 +1,5 @@
 import 'package:couple_chat_app/src/common/dear_design.dart';
+import 'package:couple_chat_app/src/common/error_mapper.dart';
 import 'package:couple_chat_app/src/features/auth/data/auth_providers.dart';
 import 'package:couple_chat_app/src/features/notifications/data/notification_inbox.dart';
 import 'package:couple_chat_app/src/features/notifications/data/notification_route.dart';
@@ -16,6 +17,7 @@ class NotificationInboxPage extends ConsumerStatefulWidget {
 
 class _NotificationInboxPageState extends ConsumerState<NotificationInboxPage> {
   bool _markingAll = false;
+  bool _retrying = false;
   final Set<String> _openingIds = <String>{};
 
   Future<void> _markAll(List<String> unreadIds) async {
@@ -23,10 +25,14 @@ class _NotificationInboxPageState extends ConsumerState<NotificationInboxPage> {
     setState(() => _markingAll = true);
     try {
       await ref.read(markNotificationReadProvider)(unreadIds);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('읽음 상태를 저장하지 못했어요. 다시 시도해 주세요.')),
+        SnackBar(
+          content: Text(
+            '읽음 상태를 저장하지 못했어요. ${toFriendlyErrorMessage(error)}',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _markingAll = false);
@@ -42,13 +48,31 @@ class _NotificationInboxPageState extends ConsumerState<NotificationInboxPage> {
     if (route != null) context.push(route);
     try {
       await ref.read(markNotificationReadProvider)([item.id]);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('알림은 열었지만 읽음 상태를 저장하지 못했어요.')),
+        SnackBar(
+          content: Text(
+            '알림은 열었지만 읽음 상태를 저장하지 못했어요. '
+            '${toFriendlyErrorMessage(error)}',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _openingIds.remove(item.id));
+    }
+  }
+
+  Future<void> _retry(String userId) async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    ref.invalidate(notificationInboxProvider(userId));
+    try {
+      await ref.read(notificationInboxProvider(userId).future);
+    } catch (_) {
+      // The provider keeps the original exception and renders it inline.
+    } finally {
+      if (mounted) setState(() => _retrying = false);
     }
   }
 
@@ -79,8 +103,10 @@ class _NotificationInboxPageState extends ConsumerState<NotificationInboxPage> {
       body: DearBackground(
         child: inboxAsync.when(
           loading: () => const _InboxSkeleton(),
-          error: (_, __) => _InboxError(
-            onRetry: () => ref.invalidate(notificationInboxProvider(userId)),
+          error: (error, __) => _InboxError(
+            message: '알림을 불러오지 못했어요. ${toFriendlyErrorMessage(error)}',
+            retrying: _retrying,
+            onRetry: () => _retry(userId),
           ),
           data: (items) {
             if (items.isEmpty) return const _InboxEmpty();
@@ -240,25 +266,32 @@ class _InboxEmpty extends StatelessWidget {
 }
 
 class _InboxError extends StatelessWidget {
-  const _InboxError({required this.onRetry});
+  const _InboxError({
+    required this.message,
+    required this.onRetry,
+    required this.retrying,
+  });
 
+  final String message;
   final VoidCallback onRetry;
+  final bool retrying;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('알림을 불러오지 못했어요.'),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('다시 시도'),
-          ),
-        ],
-      ),
+    return ListView(
+      key: const Key('notification-inbox-error-scroll'),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(DearSpacing.space24),
+      children: [
+        const SizedBox(height: 120),
+        DearInlineError(
+          key: const Key('notification-inbox-error'),
+          message: message,
+          retryButtonKey: const Key('notification-inbox-retry-button'),
+          retrying: retrying,
+          onRetry: onRetry,
+        ),
+      ],
     );
   }
 }

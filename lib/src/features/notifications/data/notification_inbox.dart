@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -73,16 +75,35 @@ class NotificationInboxRepository {
                 ),
               )
               .toList(growable: false),
-        );
+        )
+        .handleError((Object error, StackTrace stackTrace) {
+          developer.log(
+            'Failed to watch the notification inbox.',
+            name: 'dear.notifications.inbox',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          Error.throwWithStackTrace(error, stackTrace);
+        });
   }
 
   Future<void> markRead(Iterable<String> ids) async {
     final uniqueIds = ids.toSet().toList(growable: false);
     if (uniqueIds.isEmpty) return;
-    await _client.rpc(
-      'mark_notification_jobs_read',
-      params: {'target_job_ids': uniqueIds},
-    );
+    try {
+      await _client.rpc(
+        'mark_notification_jobs_read',
+        params: {'target_job_ids': uniqueIds},
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to mark notification jobs as read.',
+        name: 'dear.notifications.inbox',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 }
 

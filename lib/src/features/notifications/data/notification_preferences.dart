@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -118,14 +120,33 @@ class NotificationPreferencesRepository {
         .map((rows) {
           if (rows.isEmpty) return NotificationPreferences.defaults(userId);
           return NotificationPreferences.fromMap(rows.first);
+        })
+        .handleError((Object error, StackTrace stackTrace) {
+          developer.log(
+            'Failed to watch notification preferences.',
+            name: 'dear.notifications.preferences',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          Error.throwWithStackTrace(error, stackTrace);
         });
   }
 
   Future<void> save(NotificationPreferences preferences) async {
-    await _client.from('notification_preferences').upsert(
-          preferences.toMap(),
-          onConflict: 'user_id',
-        );
+    try {
+      await _client.from('notification_preferences').upsert(
+            preferences.toMap(),
+            onConflict: 'user_id',
+          );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to save notification preferences.',
+        name: 'dear.notifications.preferences',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 }
 

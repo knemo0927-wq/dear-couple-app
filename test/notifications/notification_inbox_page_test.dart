@@ -10,6 +10,83 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  testWidgets('서버 오류를 live region으로 알리고 44pt 재시도로 복구한다', (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+    var attempts = 0;
+    final session = Session(
+      accessToken: 'test-token',
+      tokenType: 'bearer',
+      user: const User(
+        id: 'user-1',
+        appMetadata: <String, dynamic>{},
+        userMetadata: <String, dynamic>{},
+        aud: 'authenticated',
+        createdAt: '2026-07-12T00:00:00Z',
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionProvider.overrideWith((ref) => Stream.value(session)),
+          notificationInboxProvider.overrideWith((ref, userId) {
+            attempts += 1;
+            if (attempts == 1) {
+              return Stream<List<NotificationInboxItem>>.error(
+                const PostgrestException(
+                  message: 'notification_jobs is missing',
+                  code: 'PGRST205',
+                ),
+              );
+            }
+            return Stream.value(const <NotificationInboxItem>[]);
+          }),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const NotificationInboxPage(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final error = find.byKey(const Key('notification-inbox-error'));
+    final retry = find.byKey(const Key('notification-inbox-retry-button'));
+    expect(error, findsOneWidget);
+    expect(
+      tester
+          .getSemantics(error)
+          .getSemanticsData()
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+    expect(tester.getSize(retry).width, greaterThanOrEqualTo(44));
+    expect(tester.getSize(retry).height, greaterThanOrEqualTo(44));
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(retry);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(attempts, 2);
+    expect(error, findsNothing);
+    expect(find.text('새로운 알림이 없어요.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
   testWidgets('읽음 저장이 실패해도 선택한 알림 딥링크를 연다', (tester) async {
     const coupleId = '11111111-1111-4111-8111-111111111111';
     final router = GoRouter(

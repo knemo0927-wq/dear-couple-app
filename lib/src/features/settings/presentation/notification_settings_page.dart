@@ -284,6 +284,8 @@ class _NotificationSettingsPageState
             DearInlineError(
               key: const Key('notification-preferences-error'),
               message: _preferencesError!,
+              retryButtonKey:
+                  const Key('notification-preferences-retry-button'),
               onRetry: _saving ? null : _retryPreferences,
               retrying: _preferencesRetrying,
             ),
@@ -302,6 +304,7 @@ class _NotificationSettingsPageState
           DearInlineError(
             key: const Key('notification-preferences-error'),
             message: _preferencesError!,
+            retryButtonKey: const Key('notification-preferences-retry-button'),
             onRetry: _saving ? null : _retryPreferences,
             retrying: _preferencesRetrying,
           ),

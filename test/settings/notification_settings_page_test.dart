@@ -50,6 +50,10 @@ void main() {
       find.descendant(of: error, matching: find.byType(TextButton)),
     );
     expect(retryButton.onPressed, isNull);
+    final retryTarget =
+        find.byKey(const Key('notification-preferences-retry-button'));
+    expect(tester.getSize(retryTarget).width, greaterThanOrEqualTo(44));
+    expect(tester.getSize(retryTarget).height, greaterThanOrEqualTo(44));
 
     preferences.add(_preferences('user-1'));
     await tester.pump();
