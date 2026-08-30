@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -92,6 +93,8 @@ class ChatRepository {
   static const int initialPageSize = 30;
   static const String _messageColumns =
       'id,couple_id,sender_id,body,image_path,created_at,reply_to_message_id';
+  static const String _legacyMessageColumns =
+      'id,couple_id,sender_id,body,image_path,created_at';
 
   /// Watches only the newest page and applies message/reaction changes
   /// incrementally through Supabase Realtime. Older pages are loaded explicitly
@@ -207,17 +210,71 @@ class ChatRepository {
         .replaceAll(r'\', r'\\')
         .replaceAll('%', r'\%')
         .replaceAll('_', r'\_');
-    final rows = await _client
+    late final List<Map<String, dynamic>> rows;
+    try {
+      rows = await _searchMessageRows(
+        coupleId: coupleId,
+        escapedQuery: escapedQuery,
+        columns: _messageColumns,
+        limit: limit,
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Message search request failed.',
+        name: 'dear.chat.search',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (error is! PostgrestException || !_isMissingReplyToMessageId(error)) {
+        rethrow;
+      }
+
+      try {
+        rows = await _searchMessageRows(
+          coupleId: coupleId,
+          escapedQuery: escapedQuery,
+          columns: _legacyMessageColumns,
+          limit: limit,
+        );
+      } catch (fallbackError, fallbackStackTrace) {
+        developer.log(
+          'Legacy message search fallback failed.',
+          name: 'dear.chat.search',
+          error: fallbackError,
+          stackTrace: fallbackStackTrace,
+        );
+        rethrow;
+      }
+    }
+    return List<ChatMessage>.unmodifiable(
+      await _withReactionState(_messagesFromRows(rows).reversed.toList()),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _searchMessageRows({
+    required String coupleId,
+    required String escapedQuery,
+    required String columns,
+    required int limit,
+  }) {
+    return _client
         .from('messages')
-        .select(_messageColumns)
+        .select(columns)
         .eq('couple_id', coupleId)
         .not('body', 'is', null)
         .ilike('body', '%$escapedQuery%')
         .order('id', ascending: false)
         .limit(limit);
-    return List<ChatMessage>.unmodifiable(
-      await _withReactionState(_messagesFromRows(rows).reversed.toList()),
-    );
+  }
+
+  bool _isMissingReplyToMessageId(PostgrestException error) {
+    if (error.code != '42703' && error.code != 'PGRST204') return false;
+    final diagnostics = <Object?>[
+      error.message,
+      error.details,
+      error.hint,
+    ].whereType<Object>().join(' ').toLowerCase();
+    return diagnostics.contains('reply_to_message_id');
   }
 
   Future<ChatMessagePage> fetchMediaPage({
