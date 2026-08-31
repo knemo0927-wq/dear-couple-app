@@ -239,6 +239,7 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isCompactHeight = MediaQuery.sizeOf(context).height < 500;
     final profileAsync = ref.watch(myProfileProvider);
     final sessionAsync = ref.watch(omokSessionProvider(widget.sessionId));
     final movesAsync = ref.watch(omokMovesProvider(widget.sessionId));
@@ -399,6 +400,9 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                         profile.userId == session.whiteUserId;
                     final statusLabel =
                         _buildStatusLabel(session, profile.userId, isMyTurn);
+                    final roleLabel =
+                        _buildPlayerRoleLabel(session, profile.userId);
+                    final assignmentLabel = _buildStoneAssignmentLabel(session);
                     final secondsLeft = _secondsUntil(session.turnExpiresAt);
                     final boardSummary = _buildBoardSummary(
                       session: session,
@@ -409,15 +413,22 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
 
                     return Column(
                       children: [
-                        _OmokConnectionBanner(
-                          reconnecting: _lastSyncError != null,
-                          detail: _lastSyncError,
-                          onRetry: _retryRealtime,
-                        ),
+                        if (!isCompactHeight || _lastSyncError != null)
+                          _OmokConnectionBanner(
+                            reconnecting: _lastSyncError != null,
+                            detail: _lastSyncError,
+                            onRetry: _retryRealtime,
+                          ),
                         Semantics(
+                          key: const ValueKey('omok-game-status'),
                           container: true,
                           liveRegion: true,
-                          label: '대국 상태. $statusLabel',
+                          label: [
+                            '대국 상태.',
+                            roleLabel,
+                            if (assignmentLabel != null) assignmentLabel,
+                            statusLabel,
+                          ].join(' '),
                           child: DearCard(
                             margin: const EdgeInsets.fromLTRB(16, 10, 16, 8),
                             padding: const EdgeInsets.all(14),
@@ -426,9 +437,12 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _OmokStatusHeader(
-                                  title: isPlayer
-                                      ? (isMyTurn ? '내 차례' : '상대 차례')
-                                      : '관전 모드',
+                                  title: _buildStatusTitle(
+                                    session,
+                                    profile.userId,
+                                    isMyTurn,
+                                    isPlayer,
+                                  ),
                                   emphasized: isMyTurn,
                                   action: !isPlayer
                                       ? null
@@ -458,7 +472,31 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
                                               ),
                                             ),
                                 ),
-                                const SizedBox(height: 4),
+                                if (isPlayer) ...[
+                                  const SizedBox(height: DearSpacing.space8),
+                                  _OmokStoneRoleBadge(
+                                    isBlack:
+                                        profile.userId == session.blackUserId,
+                                    label: roleLabel,
+                                  ),
+                                ],
+                                if (assignmentLabel != null) ...[
+                                  const SizedBox(height: DearSpacing.space8),
+                                  Text(
+                                    assignmentLabel,
+                                    key: const ValueKey(
+                                      'omok-stone-assignment-explanation',
+                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          height: 1.35,
+                                        ),
+                                  ),
+                                ],
+                                const SizedBox(height: DearSpacing.space4),
                                 Text(
                                   statusLabel,
                                   style: Theme.of(context)
@@ -735,14 +773,49 @@ class _OmokGamePageState extends ConsumerState<OmokGamePage> {
         if (session.winnerUserId == myUserId) {
           return '승리! 전적에 기록됐어요.';
         }
-        return '패배. 다음 판에서 이겨봐요.';
+        if (myUserId == session.blackUserId ||
+            myUserId == session.whiteUserId) {
+          return '패배. 다음 판에서 이겨봐요.';
+        }
+        return '대국이 종료됐어요.';
       case 'draw':
-        return '무승부로 종료됐어요.';
+        return '무승부로 종료됐어요. 다음 대국의 돌은 새 대국을 만들 때 정해져요.';
       case 'cancelled':
-        return '대국이 취소됐어요.';
+        return '대국이 취소됐어요. 다음 대국의 돌은 새 대국을 만들 때 정해져요.';
       default:
         return session.status;
     }
+  }
+
+  String _buildStatusTitle(
+    OmokSessionInfo session,
+    String myUserId,
+    bool isMyTurn,
+    bool isPlayer,
+  ) {
+    if (!session.isPlaying) {
+      if (!isPlayer || session.winnerUserId == null) return '대국 종료';
+      return session.winnerUserId == myUserId ? '승리' : '패배';
+    }
+    if (!isPlayer) return '관전 모드';
+    return isMyTurn ? '내 차례' : '상대 차례';
+  }
+
+  String _buildPlayerRoleLabel(
+    OmokSessionInfo session,
+    String myUserId,
+  ) {
+    if (myUserId == session.blackUserId) return '내 돌 · 흑돌 · 선공';
+    if (myUserId == session.whiteUserId) return '내 돌 · 백돌 · 후공';
+    return '관전자 · 흑돌 선공';
+  }
+
+  String? _buildStoneAssignmentLabel(OmokSessionInfo session) {
+    return switch (session.stoneAssignmentReason) {
+      'previous_result' => '최근 승패 기록으로 돌이 배정됐어요.',
+      'random_no_history' => '승패 기록이 없어 돌을 무작위로 배정했어요.',
+      _ => null,
+    };
   }
 
   int _secondsUntil(DateTime? expiresAt) {
@@ -816,6 +889,61 @@ class _OmokStatusHeader extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _OmokStoneRoleBadge extends StatelessWidget {
+  const _OmokStoneRoleBadge({
+    required this.isBlack,
+    required this.label,
+  });
+
+  final bool isBlack;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ExcludeSemantics(
+      child: Container(
+        key: const ValueKey('omok-player-stone-role'),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DearSpacing.space12,
+          vertical: DearSpacing.space8,
+        ),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(DearRadii.pill),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: isBlack ? Colors.black : Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isBlack ? Colors.black : scheme.outline,
+                ),
+              ),
+            ),
+            const SizedBox(width: DearSpacing.space8),
+            Flexible(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

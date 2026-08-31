@@ -96,6 +96,8 @@ class OmokSessionInfo {
     required this.winnerUserId,
     required this.turnExpiresAt,
     required this.createdAt,
+    this.stoneAssignmentReason,
+    this.stoneAssignmentSourceSessionId,
   });
 
   final String id;
@@ -107,6 +109,8 @@ class OmokSessionInfo {
   final String? winnerUserId;
   final DateTime? turnExpiresAt;
   final DateTime createdAt;
+  final String? stoneAssignmentReason;
+  final String? stoneAssignmentSourceSessionId;
 
   bool get isPlaying => status == 'playing';
 
@@ -123,6 +127,9 @@ class OmokSessionInfo {
           ? null
           : DateTime.parse(map['turn_expires_at'] as String),
       createdAt: DateTime.parse(map['created_at'] as String),
+      stoneAssignmentReason: map['stone_assignment_reason'] as String?,
+      stoneAssignmentSourceSessionId:
+          map['stone_assignment_source_session_id'] as String?,
     );
   }
 }

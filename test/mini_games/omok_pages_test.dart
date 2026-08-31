@@ -97,12 +97,16 @@ void main() {
     String currentTurnUserId = 'user-1',
     String status = 'playing',
     String? winnerUserId,
+    String blackUserId = 'user-1',
+    String whiteUserId = 'user-2',
+    String? stoneAssignmentReason,
+    String? stoneAssignmentSourceSessionId,
   }) {
     return OmokSessionInfo(
       id: 'accessible-game',
       coupleId: 'couple-1',
-      blackUserId: 'user-1',
-      whiteUserId: 'user-2',
+      blackUserId: blackUserId,
+      whiteUserId: whiteUserId,
       currentTurnUserId: status == 'playing' ? currentTurnUserId : null,
       status: status,
       winnerUserId: winnerUserId,
@@ -110,6 +114,8 @@ void main() {
           ? DateTime.now().add(const Duration(minutes: 5))
           : null,
       createdAt: DateTime.now(),
+      stoneAssignmentReason: stoneAssignmentReason,
+      stoneAssignmentSourceSessionId: stoneAssignmentSourceSessionId,
     );
   }
 
@@ -184,6 +190,40 @@ void main() {
     await tester.tap(find.text('$value').last);
     await tester.pumpAndSettle();
   }
+
+  test('대국 세션은 돌 배정 근거를 선택적으로 파싱한다', () {
+    final session = OmokSessionInfo.fromMap({
+      'id': 'game-with-assignment',
+      'couple_id': 'couple-1',
+      'black_user_id': 'user-2',
+      'white_user_id': 'user-1',
+      'current_turn_user_id': 'user-2',
+      'status': 'playing',
+      'winner_user_id': null,
+      'turn_expires_at': '2026-08-31T12:00:30Z',
+      'created_at': '2026-08-31T12:00:00Z',
+      'stone_assignment_reason': 'previous_result',
+      'stone_assignment_source_session_id': 'previous-game',
+    });
+
+    expect(session.stoneAssignmentReason, 'previous_result');
+    expect(session.stoneAssignmentSourceSessionId, 'previous-game');
+
+    final legacySession = OmokSessionInfo.fromMap({
+      'id': 'legacy-game',
+      'couple_id': 'couple-1',
+      'black_user_id': 'user-1',
+      'white_user_id': 'user-2',
+      'current_turn_user_id': null,
+      'status': 'cancelled',
+      'winner_user_id': null,
+      'turn_expires_at': null,
+      'created_at': '2026-08-31T12:00:00Z',
+    });
+
+    expect(legacySession.stoneAssignmentReason, isNull);
+    expect(legacySession.stoneAssignmentSourceSessionId, isNull);
+  });
 
   testWidgets('메인 더보기가 규칙·전체 기록·새로고침 액션을 제공한다', (tester) async {
     configurePhone(tester);
@@ -483,6 +523,85 @@ void main() {
     expect(find.text('재대결 신청'), findsNothing);
   });
 
+  testWidgets('백돌·후공과 최근 승패 배정 근거를 화면과 live semantics로 안내한다', (tester) async {
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: Stream.value(
+        gameSession(
+          blackUserId: 'user-2',
+          whiteUserId: 'user-1',
+          currentTurnUserId: 'user-2',
+          stoneAssignmentReason: 'previous_result',
+          stoneAssignmentSourceSessionId: 'previous-game',
+        ),
+      ),
+      movesStream: Stream.value(const <OmokMove>[]),
+    );
+
+    expect(find.text('내 돌 · 백돌 · 후공'), findsOneWidget);
+    expect(find.text('최근 승패 기록으로 돌이 배정됐어요.'), findsOneWidget);
+    final semantics = tester.getSemantics(
+      find.byKey(const ValueKey('omok-game-status')),
+    );
+    expect(semantics.getSemanticsData().flagsCollection.isLiveRegion, isTrue);
+    expect(semantics.label, contains('내 돌 · 백돌 · 후공'));
+    expect(semantics.label, contains('최근 승패 기록'));
+  });
+
+  testWidgets('승패 기록이 없으면 흑돌·선공과 무작위 배정을 안내한다', (tester) async {
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: Stream.value(
+        gameSession(stoneAssignmentReason: 'random_no_history'),
+      ),
+      movesStream: Stream.value(const <OmokMove>[]),
+    );
+
+    expect(find.text('내 돌 · 흑돌 · 선공'), findsOneWidget);
+    expect(find.text('승패 기록이 없어 돌을 무작위로 배정했어요.'), findsOneWidget);
+  });
+
+  testWidgets('결판 뒤 승자에게 승리 상태를 안내한다', (tester) async {
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: Stream.value(
+        gameSession(status: 'black_win', winnerUserId: 'user-1'),
+      ),
+      movesStream: Stream.value(const <OmokMove>[]),
+    );
+
+    expect(find.text('승리'), findsOneWidget);
+    expect(find.text('승리! 전적에 기록됐어요.'), findsOneWidget);
+  });
+
+  testWidgets('결판 뒤 패자에게 패배 상태를 안내한다', (tester) async {
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: Stream.value(
+        gameSession(status: 'white_win', winnerUserId: 'user-2'),
+      ),
+      movesStream: Stream.value(const <OmokMove>[]),
+    );
+
+    expect(find.text('패배'), findsOneWidget);
+    expect(find.text('패배. 다음 판에서 이겨봐요.'), findsOneWidget);
+  });
+
+  testWidgets('무승부는 다음 대국 배정을 확정적으로 예고하지 않는다', (tester) async {
+    await pumpAccessibleGame(
+      tester,
+      sessionStream: Stream.value(gameSession(status: 'draw')),
+      movesStream: Stream.value(const <OmokMove>[]),
+    );
+
+    expect(
+      find.text('무승부로 종료됐어요. 다음 대국의 돌은 새 대국을 만들 때 정해져요.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('백돌·후공이에요'), findsNothing);
+    expect(find.textContaining('흑돌·선공이에요'), findsNothing);
+  });
+
   testWidgets('작은 보드 셀 탭은 좌표 확인을 열고 명시적 확인 뒤 정확한 좌표를 호출한다', (tester) async {
     final placement = Completer<OmokMoveResult>();
     var placeCalls = 0;
@@ -709,7 +828,9 @@ void main() {
       textScale: 2,
       bottomInset: 34,
       disableAnimations: true,
-      sessionStream: Stream.value(gameSession()),
+      sessionStream: Stream.value(
+        gameSession(stoneAssignmentReason: 'random_no_history'),
+      ),
       movesStream: Stream.value(const <OmokMove>[]),
     );
 
@@ -722,6 +843,7 @@ void main() {
       tester.getTopLeft(resignButton).dy,
       greaterThanOrEqualTo(tester.getBottomLeft(find.text('내 차례')).dy),
     );
+    expect(find.text('승패 기록이 없어 돌을 무작위로 배정했어요.'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(coordinateButton);
@@ -760,6 +882,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('가로 화면과 큰 글자에서도 돌 배정 상태가 넘치지 않는다', (tester) async {
+    await pumpAccessibleGame(
+      tester,
+      size: const Size(844, 375),
+      textScale: 1.3,
+      disableAnimations: true,
+      sessionStream: Stream.value(
+        gameSession(
+          blackUserId: 'user-2',
+          whiteUserId: 'user-1',
+          currentTurnUserId: 'user-2',
+          stoneAssignmentReason: 'previous_result',
+        ),
+      ),
+      movesStream: Stream.value(const <OmokMove>[]),
+    );
+
+    expect(find.text('내 돌 · 백돌 · 후공'), findsOneWidget);
+    expect(find.text('최근 승패 기록으로 돌이 배정됐어요.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('다크 모드 대국 chrome은 semantic 색을 쓰고 보드·돌 고유색을 보존한다', (tester) async {
     final theme = AppTheme.dark();
     final moves = [
@@ -787,7 +931,9 @@ void main() {
     await pumpAccessibleGame(
       tester,
       theme: theme,
-      sessionStream: Stream.value(gameSession()),
+      sessionStream: Stream.value(
+        gameSession(stoneAssignmentReason: 'previous_result'),
+      ),
       movesStream: Stream.value(moves),
     );
 
@@ -803,6 +949,10 @@ void main() {
     expect(
       tester.widget<Text>(find.text('내 차례')).style?.color,
       theme.colorScheme.primary,
+    );
+    expect(
+      tester.widget<Text>(find.text('최근 승패 기록으로 돌이 배정됐어요.')).style?.color,
+      theme.colorScheme.onSurfaceVariant,
     );
 
     final board = tester.widget<Container>(
